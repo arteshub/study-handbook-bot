@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/HandbookBot.API/HandbookBot.API.csproj" />
+    <Project Path="backend/HandbookBot.Application/HandbookBot.Application.csproj" />
+    <Project Path="backend/HandbookBot.Domain/HandbookBot.Domain.csproj" />
+    <Project Path="backend/HandbookBot.Infrastructure/HandbookBot.Infrastructure.csproj" />
+  </Folder>
+</Solution>

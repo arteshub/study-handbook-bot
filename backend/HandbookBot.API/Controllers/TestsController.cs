@@ -1,0 +1,60 @@
+using HandbookBot.Application.Tests.Commands.CompleteTestSession;
+using HandbookBot.Application.Tests.Commands.StartTestSession;
+using HandbookBot.Application.Tests.Commands.SubmitAnswer;
+using HandbookBot.Application.Tests.Queries.GetNextQuestion;
+using HandbookBot.Application.Tests.Queries.GetTestHistory;
+using HandbookBot.Application.Tests.Queries.GetTestSession;
+using HandbookBot.Domain.Enums;
+using Microsoft.AspNetCore.Mvc;
+
+namespace HandbookBot.API.Controllers;
+
+public sealed class TestsController : BaseController
+{
+    [HttpPost("sessions")]
+    public async Task<IActionResult> Start([FromBody] StartTestRequest req, CancellationToken ct)
+    {
+        var session = await Mediator.Send(new StartTestSessionCommand(
+            CurrentUserId, req.Mode, req.SectionId, req.SubsectionId, req.TopicId, req.QuestionsPerTopic), ct);
+        return Created($"/api/tests/sessions/{session.Id}", session);
+    }
+
+    [HttpGet("sessions/{id:guid}")]
+    public async Task<IActionResult> GetSession(Guid id, CancellationToken ct) =>
+        Ok(await Mediator.Send(new GetTestSessionQuery(id, CurrentUserId), ct));
+
+    [HttpGet("sessions/{id:guid}/next")]
+    public async Task<IActionResult> GetNextQuestion(Guid id, CancellationToken ct)
+    {
+        var question = await Mediator.Send(new GetNextQuestionQuery(id, CurrentUserId), ct);
+        return question is null ? NoContent() : Ok(question);
+    }
+
+    [HttpPost("sessions/{id:guid}/answers")]
+    public async Task<IActionResult> SubmitAnswer(Guid id, [FromBody] SubmitAnswerRequest req, CancellationToken ct)
+    {
+        var result = await Mediator.Send(new SubmitAnswerCommand(
+            id, req.ResultId, CurrentUserId, req.UserAnswer, req.SelfMarkedCorrect), ct);
+        return Ok(result);
+    }
+
+    [HttpPost("sessions/{id:guid}/complete")]
+    public async Task<IActionResult> Complete(Guid id, CancellationToken ct) =>
+        Ok(await Mediator.Send(new CompleteTestSessionCommand(id, CurrentUserId), ct));
+
+    [HttpGet("history")]
+    public async Task<IActionResult> GetHistory(CancellationToken ct) =>
+        Ok(await Mediator.Send(new GetTestHistoryQuery(CurrentUserId), ct));
+}
+
+public sealed record StartTestRequest(
+    TestMode Mode,
+    Guid? SectionId,
+    Guid? SubsectionId,
+    Guid? TopicId,
+    int QuestionsPerTopic = 3);
+
+public sealed record SubmitAnswerRequest(
+    Guid ResultId,
+    string? UserAnswer,
+    bool? SelfMarkedCorrect);

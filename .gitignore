@@ -1,0 +1,26 @@
+# Environment
+.env
+*.env.local
+
+# .NET
+**/bin/
+**/obj/
+*.user
+.vs/
+.idea/
+
+# Node
+**/node_modules/
+**/dist/
+frontend/.next/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Postgres data
+postgres_data/
