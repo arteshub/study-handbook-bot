@@ -16,7 +16,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
         services.AddDbContext<AppDbContext>(opt =>
-            opt.UseNpgsql(config.GetConnectionString("DefaultConnection")));
+            opt.UseNpgsql(ResolveConnectionString(config)));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IPdfService, PdfService>();
@@ -28,5 +28,20 @@ public static class DependencyInjection
         services.AddHostedService<TelegramBotService>();
 
         return services;
+    }
+
+    private static string ResolveConnectionString(IConfiguration config)
+    {
+        // Standard .NET connection string
+        var cs = config.GetConnectionString("DefaultConnection");
+        if (!string.IsNullOrEmpty(cs)) return cs;
+
+        // Railway / Heroku style: postgresql://user:pass@host:port/db
+        var url = config["DATABASE_URL"];
+        if (string.IsNullOrEmpty(url)) throw new InvalidOperationException("No database connection string configured.");
+
+        var uri = new Uri(url);
+        var userInfo = uri.UserInfo.Split(':');
+        return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
     }
 }
