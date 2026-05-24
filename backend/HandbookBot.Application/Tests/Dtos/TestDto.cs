@@ -12,17 +12,24 @@ public sealed record TestSessionDto(
     DateTime StartedAt,
     DateTime? CompletedAt);
 
+public sealed record QuestionOptionDto(int Index, string Text);
+
 public sealed record TestQuestionDto(
     Guid ResultId,
     Guid TopicId,
     string TopicTitle,
     string Question,
+    string? CorrectAnswer,
     int QuestionNumber,
-    int TotalQuestions);
+    int TotalQuestions,
+    IReadOnlyList<QuestionOptionDto>? Options);
+
+public sealed record AnswerOptionResultDto(int Index, string Text, bool IsCorrect, string Explanation);
 
 public sealed record TestAnswerResultDto(
     bool IsCorrect,
     string CorrectAnswer,
     string? AiFeedback,
     int CorrectAnswers,
-    int TotalAnswered);
+    int TotalAnswered,
+    IReadOnlyList<AnswerOptionResultDto>? OptionResults);

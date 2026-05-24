@@ -15,6 +15,25 @@ public sealed class Topic : BaseEntity
     private readonly List<Topic> _children = [];
     public IReadOnlyCollection<Topic> Children => _children.AsReadOnly();
 
+    private readonly List<TopicLink> _links = [];
+    public IReadOnlyCollection<TopicLink> Links => _links.AsReadOnly();
+
+    public TopicLink AddLink(string title, string url)
+    {
+        var link = TopicLink.Create(Id, title, url);
+        _links.Add(link);
+        Touch();
+        return link;
+    }
+
+    public void RemoveLink(Guid linkId)
+    {
+        var link = _links.FirstOrDefault(l => l.Id == linkId)
+            ?? throw new DomainException("Link not found.");
+        _links.Remove(link);
+        Touch();
+    }
+
     private Topic() { }
 
     public static Topic Create(Guid subsectionId, string title, string content, string? summary, int order = 0, Guid? parentTopicId = null)

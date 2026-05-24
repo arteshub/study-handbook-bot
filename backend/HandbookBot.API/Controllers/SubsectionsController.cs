@@ -8,13 +8,11 @@ namespace HandbookBot.API.Controllers;
 
 public sealed class SubsectionsController : BaseController
 {
-    [HttpGet("sections/{sectionId:guid}/subsections")]
-    [Route("/api/sections/{sectionId:guid}/subsections")]
+    [HttpGet("/api/sections/{sectionId:guid}/subsections")]
     public async Task<IActionResult> GetAll(Guid sectionId, CancellationToken ct) =>
         Ok(await Mediator.Send(new GetSubsectionsQuery(sectionId, CurrentUserId), ct));
 
-    [HttpPost("sections/{sectionId:guid}/subsections")]
-    [Route("/api/sections/{sectionId:guid}/subsections")]
+    [HttpPost("/api/sections/{sectionId:guid}/subsections")]
     public async Task<IActionResult> Create(Guid sectionId, [FromBody] SubsectionRequest req, CancellationToken ct)
     {
         var id = await Mediator.Send(new CreateSubsectionCommand(sectionId, CurrentUserId, req.Title, req.Description), ct);

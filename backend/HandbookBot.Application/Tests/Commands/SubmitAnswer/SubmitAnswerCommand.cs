@@ -8,4 +8,5 @@ public sealed record SubmitAnswerCommand(
     Guid ResultId,
     long UserId,
     string? UserAnswer,
-    bool? SelfMarkedCorrect) : IRequest<TestAnswerResultDto>;
+    bool? SelfMarkedCorrect,
+    int? SelectedOptionIndex) : IRequest<TestAnswerResultDto>;

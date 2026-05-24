@@ -140,6 +140,9 @@ namespace HandbookBot.Infrastructure.Data.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_correct");
 
+                    b.Property<string>("OptionsJson")
+                        .HasColumnType("text");
+
                     b.Property<int>("Order")
                         .HasColumnType("integer")
                         .HasColumnName("order");
@@ -279,6 +282,78 @@ namespace HandbookBot.Infrastructure.Data.Migrations
                     b.ToTable("topics", (string)null);
                 });
 
+            modelBuilder.Entity("HandbookBot.Domain.Entities.TopicLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TopicId");
+
+                    b.ToTable("topic_links", (string)null);
+                });
+
+            modelBuilder.Entity("HandbookBot.Domain.Entities.TopicProgress", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CorrectStreak")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<float>("EaseFactor")
+                        .HasColumnType("real");
+
+                    b.Property<int>("IntervalDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Mastery")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("NextReviewAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TopicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "NextReviewAt");
+
+                    b.HasIndex("UserId", "TopicId")
+                        .IsUnique();
+
+                    b.ToTable("topic_progress", (string)null);
+                });
+
             modelBuilder.Entity("HandbookBot.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -369,6 +444,15 @@ namespace HandbookBot.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("HandbookBot.Domain.Entities.TopicLink", b =>
+                {
+                    b.HasOne("HandbookBot.Domain.Entities.Topic", null)
+                        .WithMany("Links")
+                        .HasForeignKey("TopicId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HandbookBot.Domain.Entities.Section", b =>
                 {
                     b.Navigation("Subsections");
@@ -387,6 +471,8 @@ namespace HandbookBot.Infrastructure.Data.Migrations
             modelBuilder.Entity("HandbookBot.Domain.Entities.Topic", b =>
                 {
                     b.Navigation("Children");
+
+                    b.Navigation("Links");
                 });
 
             modelBuilder.Entity("HandbookBot.Domain.Entities.User", b =>

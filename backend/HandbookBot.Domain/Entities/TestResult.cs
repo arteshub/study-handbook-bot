@@ -8,6 +8,7 @@ public sealed class TestResult : BaseEntity
     public Guid TopicId { get; private set; }
     public string Question { get; private set; } = string.Empty;
     public string CorrectAnswer { get; private set; } = string.Empty;
+    public string? OptionsJson { get; private set; }
     public string? UserAnswer { get; private set; }
     public bool? IsCorrect { get; private set; }
     public string? AiFeedback { get; private set; }
@@ -15,7 +16,7 @@ public sealed class TestResult : BaseEntity
 
     private TestResult() { }
 
-    public static TestResult Create(Guid sessionId, Guid topicId, string question, string correctAnswer, int order)
+    public static TestResult Create(Guid sessionId, Guid topicId, string question, string correctAnswer, int order, string? optionsJson = null)
     {
         return new TestResult
         {
@@ -23,6 +24,7 @@ public sealed class TestResult : BaseEntity
             TopicId = topicId,
             Question = question,
             CorrectAnswer = correctAnswer,
+            OptionsJson = optionsJson,
             Order = order
         };
     }

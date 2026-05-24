@@ -11,6 +11,7 @@ internal sealed class UnitOfWork(AppDbContext db) : IUnitOfWork
     public ITopicRepository Topics { get; } = new TopicRepository(db);
     public ITestSessionRepository TestSessions { get; } = new TestSessionRepository(db);
     public ITestResultRepository TestResults { get; } = new TestResultRepository(db);
+    public ITopicProgressRepository TopicProgress { get; } = new TopicProgressRepository(db);
 
     public Task<int> SaveChangesAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
 }

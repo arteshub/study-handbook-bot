@@ -12,6 +12,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Topic> Topics => Set<Topic>();
     public DbSet<TestSession> TestSessions => Set<TestSession>();
     public DbSet<TestResult> TestResults => Set<TestResult>();
+    public DbSet<TopicLink> TopicLinks => Set<TopicLink>();
+    public DbSet<TopicProgress> TopicProgress => Set<TopicProgress>();
 
     protected override void OnModelCreating(ModelBuilder builder) =>
         builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());

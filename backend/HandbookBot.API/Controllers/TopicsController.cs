@@ -1,6 +1,8 @@
 using HandbookBot.Application.Sections.Queries.GetSectionTree;
+using HandbookBot.Application.Topics.Commands.AddTopicLink;
 using HandbookBot.Application.Topics.Commands.CreateTopic;
 using HandbookBot.Application.Topics.Commands.DeleteTopic;
+using HandbookBot.Application.Topics.Commands.DeleteTopicLink;
 using HandbookBot.Application.Topics.Commands.UpdateTopic;
 using HandbookBot.Application.Topics.Queries.GetTopicById;
 using HandbookBot.Application.Topics.Queries.GetTopics;
@@ -42,7 +44,22 @@ public sealed class TopicsController : BaseController
         await Mediator.Send(new DeleteTopicCommand(id, CurrentUserId), ct);
         return NoContent();
     }
+
+    [HttpPost("{id:guid}/links")]
+    public async Task<IActionResult> AddLink(Guid id, [FromBody] TopicLinkRequest req, CancellationToken ct)
+    {
+        var link = await Mediator.Send(new AddTopicLinkCommand(id, CurrentUserId, req.Title, req.Url), ct);
+        return Ok(link);
+    }
+
+    [HttpDelete("{id:guid}/links/{linkId:guid}")]
+    public async Task<IActionResult> DeleteLink(Guid id, Guid linkId, CancellationToken ct)
+    {
+        await Mediator.Send(new DeleteTopicLinkCommand(id, linkId, CurrentUserId), ct);
+        return NoContent();
+    }
 }
 
 public sealed record CreateTopicRequest(string Title, string Content, string? Summary, Guid? ParentTopicId = null);
 public sealed record UpdateTopicRequest(string Title, string Content, string? Summary);
+public sealed record TopicLinkRequest(string Title, string Url);

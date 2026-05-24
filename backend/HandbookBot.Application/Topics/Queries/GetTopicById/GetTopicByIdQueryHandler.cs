@@ -18,6 +18,7 @@ internal sealed class GetTopicByIdQueryHandler(IUnitOfWork uow)
 
         if (section!.UserId != request.UserId) throw new ForbiddenException();
 
-        return new TopicDto(topic.Id, topic.SubsectionId, topic.ParentTopicId, topic.Title, topic.Content, topic.Summary, topic.Order, topic.Children.Count, topic.CreatedAt, topic.UpdatedAt);
+        var links = topic.Links.Select(l => new TopicLinkDto(l.Id, l.Title, l.Url)).ToList();
+        return new TopicDto(topic.Id, topic.SubsectionId, topic.ParentTopicId, topic.Title, topic.Content, topic.Summary, topic.Order, topic.Children.Count, links, topic.CreatedAt, topic.UpdatedAt);
     }
 }

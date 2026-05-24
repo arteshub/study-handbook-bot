@@ -1,8 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Route, Routes } from 'react-router-dom';
-import { Map } from 'lucide-react';
-import WebApp from '@twa-dev/sdk';
+import { WebApp } from './lib/telegram';
 import { setUserId } from './api/client';
 import { BottomNav } from './components/BottomNav';
 import { TreeSidebar } from './components/TreeSidebar';
@@ -33,13 +32,6 @@ export const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="max-w-lg mx-auto">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="fixed top-4 right-4 z-30 w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)] shadow-sm"
-        >
-          <Map size={18} className="opacity-60" />
-        </button>
-
         <TreeSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         <Routes>
@@ -52,7 +44,7 @@ export const App = () => {
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
-        <BottomNav />
+        <BottomNav onOpenTree={() => setSidebarOpen(true)} />
       </div>
     </QueryClientProvider>
   );

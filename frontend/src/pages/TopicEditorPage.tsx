@@ -34,7 +34,7 @@ export const TopicEditorPage = () => {
     mutationFn: () => topicsApi.update(id!, { title, content, summary }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['topics', id, 'detail'] });
-      navigate(`/topics/${id}`);
+      navigate(`/topics/${id}`, { replace: true });
     },
   });
 

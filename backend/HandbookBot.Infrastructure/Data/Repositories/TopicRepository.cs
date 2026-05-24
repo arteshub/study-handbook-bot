@@ -12,6 +12,12 @@ internal sealed class TopicRepository(AppDbContext db) : Repository<Topic>(db), 
             .OrderBy(t => t.Order).ThenBy(t => t.CreatedAt)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<Topic>> GetAllBySubsectionIdAsync(Guid subsectionId, CancellationToken ct = default) =>
+        await DbSet
+            .Where(t => t.SubsectionId == subsectionId)
+            .OrderBy(t => t.Order).ThenBy(t => t.CreatedAt)
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<Topic>> GetChildrenAsync(Guid parentTopicId, CancellationToken ct = default) =>
         await DbSet
             .Where(t => t.ParentTopicId == parentTopicId)
@@ -24,5 +30,5 @@ internal sealed class TopicRepository(AppDbContext db) : Repository<Topic>(db), 
             .ToListAsync(ct);
 
     public Task<Topic?> GetWithChildrenAsync(Guid id, CancellationToken ct = default) =>
-        DbSet.Include(t => t.Children).FirstOrDefaultAsync(t => t.Id == id, ct);
+        DbSet.Include(t => t.Children).Include(t => t.Links).FirstOrDefaultAsync(t => t.Id == id, ct);
 }

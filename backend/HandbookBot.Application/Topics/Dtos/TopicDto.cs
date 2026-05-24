@@ -1,5 +1,7 @@
 namespace HandbookBot.Application.Topics.Dtos;
 
+public sealed record TopicLinkDto(Guid Id, string Title, string Url);
+
 public sealed record TopicDto(
     Guid Id,
     Guid SubsectionId,
@@ -9,6 +11,7 @@ public sealed record TopicDto(
     string? Summary,
     int Order,
     int ChildrenCount,
+    IReadOnlyList<TopicLinkDto> Links,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 

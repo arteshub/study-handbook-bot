@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import WebApp from '@twa-dev/sdk';
+import { WebApp } from '../lib/telegram';
 
 export const useTelegram = () => {
   useEffect(() => {
@@ -8,8 +8,6 @@ export const useTelegram = () => {
   }, []);
 
   return {
-    webApp: WebApp,
     user: WebApp.initDataUnsafe?.user,
-    colorScheme: WebApp.colorScheme,
   };
 };

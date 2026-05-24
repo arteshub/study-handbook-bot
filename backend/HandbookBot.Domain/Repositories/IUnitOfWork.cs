@@ -8,6 +8,7 @@ public interface IUnitOfWork
     ITopicRepository Topics { get; }
     ITestSessionRepository TestSessions { get; }
     ITestResultRepository TestResults { get; }
+    ITopicProgressRepository TopicProgress { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

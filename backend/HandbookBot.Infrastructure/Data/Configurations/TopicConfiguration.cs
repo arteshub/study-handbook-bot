@@ -24,5 +24,10 @@ internal sealed class TopicConfiguration : IEntityTypeConfiguration<Topic>
             .WithOne()
             .HasForeignKey(c => c.ParentTopicId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(t => t.Links)
+            .WithOne()
+            .HasForeignKey(l => l.TopicId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

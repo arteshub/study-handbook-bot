@@ -1,4 +1,4 @@
-using HandbookBot.Application.Common.Exceptions;
+using System.Text.Json;
 using HandbookBot.Application.Common.Interfaces;
 using HandbookBot.Application.Tests.Dtos;
 using HandbookBot.Domain.Enums;
@@ -12,16 +12,13 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
 {
     public async Task<TestSessionDto> Handle(StartTestSessionCommand request, CancellationToken ct)
     {
-        var user = await uow.Users.GetByTelegramIdAsync(request.UserId, ct)
-            ?? throw new NotFoundException(nameof(User), request.UserId);
-
-        if (request.Mode == TestMode.AI && string.IsNullOrEmpty(user.OpenAiApiKey))
-            throw new InvalidOperationException("OpenAI API key is not configured. Go to Settings to add it.");
-
         var topics = await CollectTopicsAsync(request, ct);
         if (topics.Count == 0) throw new InvalidOperationException("No topics found for the selected scope.");
 
-        var session = TestSession.Create(request.UserId, request.Mode, request.SectionId, request.SubsectionId, request.TopicId);
+        var session = TestSession.Create(request.UserId, request.Mode,
+            request.SectionIds is { Count: 1 } ? request.SectionIds[0] : null,
+            request.SubsectionIds is { Count: 1 } ? request.SubsectionIds[0] : null,
+            request.TopicIds is { Count: 1 } ? request.TopicIds[0] : null);
         await uow.TestSessions.AddAsync(session, ct);
 
         var results = new List<TestResult>();
@@ -29,17 +26,23 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
 
         foreach (var topic in topics)
         {
+            if (string.IsNullOrWhiteSpace(topic.Content)) continue;
+
+            int count = QuestionsCountForContent(topic.Content, request.QuestionsPerTopic);
+
             if (request.Mode == TestMode.AI)
             {
-                var qas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, request.QuestionsPerTopic, user.OpenAiApiKey!, ct);
-                results.AddRange(qas.Select(qa => TestResult.Create(session.Id, topic.Id, qa.Question, qa.Answer, order++)));
+                var qas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, count, ct);
+                foreach (var (question, options) in qas)
+                {
+                    var optionsJson = JsonSerializer.Serialize(options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }));
+                    results.Add(TestResult.Create(session.Id, topic.Id, question, string.Empty, order++, optionsJson));
+                }
             }
             else
             {
-                var question = string.IsNullOrWhiteSpace(topic.Summary)
-                    ? $"Расскажи о теме: {topic.Title}"
-                    : topic.Summary;
-                results.Add(TestResult.Create(session.Id, topic.Id, question, topic.Content, order++));
+                var qas = await aiService.GenerateSelfTestQuestionsAsync(topic.Title, topic.Content, count, ct);
+                results.AddRange(qas.Select(qa => TestResult.Create(session.Id, topic.Id, qa.Question, qa.ModelAnswer, order++)));
             }
         }
 
@@ -52,18 +55,63 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
 
     private async Task<IReadOnlyList<Topic>> CollectTopicsAsync(StartTestSessionCommand req, CancellationToken ct)
     {
-        if (req.TopicId.HasValue)
+        if (req.ReviewMode)
         {
-            var t = await uow.Topics.GetByIdAsync(req.TopicId.Value, ct);
-            return t is null ? [] : [t];
+            var due = await uow.TopicProgress.GetDueForReviewAsync(req.UserId, ct);
+            var reviewed = new List<Topic>();
+            foreach (var p in due)
+            {
+                var t = await uow.Topics.GetByIdAsync(p.TopicId, ct);
+                if (t is not null && !string.IsNullOrWhiteSpace(t.Content)) reviewed.Add(t);
+            }
+            return reviewed;
         }
-        if (req.SubsectionId.HasValue) return await uow.Topics.GetRootsBySubsectionIdAsync(req.SubsectionId.Value, ct);
-        if (req.SectionId.HasValue) return await uow.Topics.GetBySectionIdAsync(req.SectionId.Value, ct);
+
+        if (req.TopicIds?.Count > 0)
+        {
+            var result = new List<Topic>();
+            foreach (var id in req.TopicIds)
+                await CollectRecursiveAsync(id, result, ct);
+            return result.DistinctBy(t => t.Id).ToList();
+        }
+        if (req.SubsectionIds?.Count > 0)
+        {
+            var result = new List<Topic>();
+            foreach (var id in req.SubsectionIds)
+                result.AddRange(await uow.Topics.GetAllBySubsectionIdAsync(id, ct));
+            return result.DistinctBy(t => t.Id).ToList();
+        }
+        if (req.SectionIds?.Count > 0)
+        {
+            var result = new List<Topic>();
+            foreach (var id in req.SectionIds)
+                result.AddRange(await uow.Topics.GetBySectionIdAsync(id, ct));
+            return result.DistinctBy(t => t.Id).ToList();
+        }
 
         var sections = await uow.Sections.GetByUserIdAsync(req.UserId, ct);
         var all = new List<Topic>();
         foreach (var s in sections)
             all.AddRange(await uow.Topics.GetBySectionIdAsync(s.Id, ct));
         return all;
+    }
+
+    private static int QuestionsCountForContent(string content, int _)
+    {
+        var len = content.Length;
+        if (len < 500)  return 5;
+        if (len < 2000) return 7;
+        if (len < 5000) return 9;
+        return 12;
+    }
+
+    private async Task CollectRecursiveAsync(Guid topicId, List<Topic> result, CancellationToken ct)
+    {
+        var topic = await uow.Topics.GetByIdAsync(topicId, ct);
+        if (topic is not null) result.Add(topic);
+
+        var children = await uow.Topics.GetChildrenAsync(topicId, ct);
+        foreach (var child in children)
+            await CollectRecursiveAsync(child.Id, result, ct);
     }
 }

@@ -21,6 +21,12 @@ export interface Subsection {
   updatedAt: string;
 }
 
+export interface TopicLink {
+  id: string;
+  title: string;
+  url: string;
+}
+
 export interface Topic {
   id: string;
   subsectionId: string;
@@ -30,6 +36,7 @@ export interface Topic {
   summary?: string;
   order: number;
   childrenCount: number;
+  links: TopicLink[];
   createdAt: string;
   updatedAt: string;
 }
@@ -80,13 +87,27 @@ export interface TestSession {
   completedAt?: string;
 }
 
+export interface QuestionOption {
+  index: number;
+  text: string;
+}
+
+export interface AnswerOptionResult {
+  index: number;
+  text: string;
+  isCorrect: boolean;
+  explanation: string;
+}
+
 export interface TestQuestion {
   resultId: string;
   topicId: string;
   topicTitle: string;
   question: string;
+  correctAnswer?: string;
   questionNumber: number;
   totalQuestions: number;
+  options?: QuestionOption[];
 }
 
 export interface TestAnswerResult {
@@ -95,4 +116,5 @@ export interface TestAnswerResult {
   aiFeedback?: string;
   correctAnswers: number;
   totalAnswered: number;
+  optionResults?: AnswerOptionResult[];
 }
