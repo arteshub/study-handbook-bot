@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, Edit, ExternalLink, FolderPlus, Link, Plus, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeft, ChevronDown, ChevronUp, Download, Edit, ExternalLink, FolderPlus, Link, Plus, Search, Trash2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import MDEditor from '@uiw/react-md-editor';
 import { topicsApi } from '../api/topics';
@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
+import { useContentSearch } from '../hooks/useContentSearch';
 
 type Panel = 'links' | 'children' | null;
 
@@ -20,6 +21,11 @@ export const TopicPage = () => {
   const [panel, setPanel] = useState<Panel>(null);
   const [childTitle, setChildTitle] = useState('');
   const [linkForm, setLinkForm] = useState({ title: '', url: '' });
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const contentRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const { query, setQuery, matchCount, currentIndex, next, prev, clear } = useContentSearch(contentRef);
 
   const { data: topic, isLoading } = useQuery({
     queryKey: ['topics', id, 'detail'],
@@ -31,6 +37,16 @@ export const TopicPage = () => {
     queryFn: () => topicsApi.getBySubsectionId(topic!.subsectionId, id!),
     enabled: !!topic,
   });
+
+  // Focus input when search bar opens
+  useEffect(() => {
+    if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 50);
+  }, [searchOpen]);
+
+  const closeSearch = () => {
+    clear();
+    setSearchOpen(false);
+  };
 
   const deleteTopic = useMutation({
     mutationFn: () => topicsApi.delete(id!),
@@ -70,47 +86,94 @@ export const TopicPage = () => {
   return (
     <div className="min-h-screen pb-28">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-[var(--tg-theme-bg-color,#fff)] border-b border-black/5 px-4 py-3 flex items-center gap-2">
-        <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)] shrink-0">
-          <ArrowLeft size={18} />
-        </button>
-        <h1 className="text-sm font-bold truncate flex-1">{topic.title}</h1>
+      <div className="sticky top-0 z-10 bg-[var(--tg-theme-bg-color,#fff)] border-b border-black/5">
+        <div className="px-4 py-3 flex items-center gap-2">
+          <button onClick={() => navigate(-1)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)] shrink-0">
+            <ArrowLeft size={18} />
+          </button>
+          <h1 className="text-sm font-bold truncate flex-1">{topic.title}</h1>
 
-        {/* Links button */}
-        <button
-          onClick={() => setPanel('links')}
-          className="relative w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]"
-        >
-          <Link size={15} className="opacity-60" />
-          {linksCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 text-[9px] font-bold rounded-full bg-[var(--tg-theme-button-color,#2481cc)] text-white flex items-center justify-center">
-              {linksCount}
-            </span>
-          )}
-        </button>
+          <button
+            onClick={() => setSearchOpen(v => !v)}
+            className={`w-9 h-9 flex items-center justify-center rounded-xl shrink-0 ${searchOpen ? 'bg-[var(--tg-theme-button-color,#2481cc)] text-white' : 'bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]'}`}
+          >
+            <Search size={15} />
+          </button>
 
-        {/* Child topics button */}
-        <button
-          onClick={() => setPanel('children')}
-          className="relative w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]"
-        >
-          <FolderPlus size={15} className="opacity-60" />
-          {childrenCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 text-[9px] font-bold rounded-full bg-[var(--tg-theme-button-color,#2481cc)] text-white flex items-center justify-center">
-              {childrenCount}
-            </span>
-          )}
-        </button>
+          <button
+            onClick={() => setPanel('links')}
+            className="relative w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]"
+          >
+            <Link size={15} className="opacity-60" />
+            {linksCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 text-[9px] font-bold rounded-full bg-[var(--tg-theme-button-color,#2481cc)] text-white flex items-center justify-center">
+                {linksCount}
+              </span>
+            )}
+          </button>
 
-        <button onClick={() => exportApi.exportTopic(id!, topic.title)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]">
-          <Download size={15} className="opacity-60" />
-        </button>
-        <button onClick={() => navigate(`/topics/${id}/edit`)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]">
-          <Edit size={15} className="opacity-60" />
-        </button>
-        <button onClick={() => deleteTopic.mutate()} className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-50">
-          <Trash2 size={15} className="text-red-400" />
-        </button>
+          <button
+            onClick={() => setPanel('children')}
+            className="relative w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]"
+          >
+            <FolderPlus size={15} className="opacity-60" />
+            {childrenCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 text-[9px] font-bold rounded-full bg-[var(--tg-theme-button-color,#2481cc)] text-white flex items-center justify-center">
+                {childrenCount}
+              </span>
+            )}
+          </button>
+
+          <button onClick={() => exportApi.exportTopic(id!, topic.title)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]">
+            <Download size={15} className="opacity-60" />
+          </button>
+          <button onClick={() => navigate(`/topics/${id}/edit`)} className="w-9 h-9 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]">
+            <Edit size={15} className="opacity-60" />
+          </button>
+          <button onClick={() => deleteTopic.mutate()} className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-50">
+            <Trash2 size={15} className="text-red-400" />
+          </button>
+        </div>
+
+        {/* Search bar */}
+        {searchOpen && (
+          <div className="px-3 pb-3 flex items-center gap-2">
+            <div className="flex-1 relative">
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Поиск по тексту..."
+                className="w-full h-9 pl-3 pr-3 text-sm rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)] outline-none"
+              />
+            </div>
+            {matchCount > 0 && (
+              <span className="text-xs opacity-50 shrink-0 min-w-[36px] text-center">
+                {currentIndex + 1}/{matchCount}
+              </span>
+            )}
+            {query && matchCount === 0 && (
+              <span className="text-xs text-red-400 shrink-0">0</span>
+            )}
+            <button
+              onClick={prev}
+              disabled={matchCount === 0}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)] disabled:opacity-30"
+            >
+              <ChevronUp size={15} />
+            </button>
+            <button
+              onClick={next}
+              disabled={matchCount === 0}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)] disabled:opacity-30"
+            >
+              <ChevronDown size={15} />
+            </button>
+            <button onClick={closeSearch} className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]">
+              <X size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="px-4 pt-4">
@@ -121,7 +184,7 @@ export const TopicPage = () => {
         )}
 
         {topic.content ? (
-          <div data-color-mode="light" className="wmde-markdown-var">
+          <div ref={contentRef} data-color-mode="light" className="wmde-markdown-var">
             <MDEditor.Markdown source={topic.content} style={{ background: 'transparent', fontSize: 14, lineHeight: 1.7 }} />
           </div>
         ) : (
@@ -135,12 +198,7 @@ export const TopicPage = () => {
       </div>
 
       {/* Links panel */}
-      <Modal
-        open={panel === 'links'}
-        title={`Ссылки (${linksCount})`}
-        onClose={() => setPanel(null)}
-        actions={null}
-      >
+      <Modal open={panel === 'links'} title={`Ссылки (${linksCount})`} onClose={() => setPanel(null)} actions={null}>
         <div className="flex flex-col gap-2 mb-4">
           {topic.links.length === 0 && (
             <p className="text-sm opacity-40 text-center py-2">Нет прикреплённых ссылок</p>
@@ -167,12 +225,7 @@ export const TopicPage = () => {
       </Modal>
 
       {/* Child topics panel */}
-      <Modal
-        open={panel === 'children'}
-        title="Подтемы"
-        onClose={() => setPanel(null)}
-        actions={null}
-      >
+      <Modal open={panel === 'children'} title="Подтемы" onClose={() => setPanel(null)} actions={null}>
         <div className="flex flex-col gap-2 mb-4">
           {(!children || children.length === 0) && (
             <p className="text-sm opacity-40 text-center py-2">Нет вложенных тем</p>
