@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { WebApp } from './lib/telegram';
-import { setUserId } from './api/client';
 import { BottomNav } from './components/BottomNav';
 import { TreeSidebar } from './components/TreeSidebar';
 import { HistoryPage } from './pages/HistoryPage';
@@ -24,9 +23,6 @@ export const App = () => {
   useEffect(() => {
     WebApp.ready();
     WebApp.expand();
-    const userId = WebApp.initDataUnsafe?.user?.id;
-    if (userId) setUserId(userId);
-    else setUserId(12345);
   }, []);
 
   return (

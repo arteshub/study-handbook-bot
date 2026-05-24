@@ -61,8 +61,8 @@ internal sealed class TelegramAuthMiddleware(
             .Select(k => $"{k}={parsed[k]}");
         var dataCheckString = string.Join("\n", entries);
 
-        // secret_key = HMAC-SHA256("WebAppData", botToken)
-        var secretKey = HMACSHA256.HashData(Encoding.UTF8.GetBytes("WebAppData"), Encoding.UTF8.GetBytes(botToken));
+        // secret_key = HMAC-SHA256(key=botToken, data="WebAppData")
+        var secretKey = HMACSHA256.HashData(Encoding.UTF8.GetBytes(botToken), Encoding.UTF8.GetBytes("WebAppData"));
         var expectedHash = HMACSHA256.HashData(secretKey, Encoding.UTF8.GetBytes(dataCheckString));
         var expectedHashHex = Convert.ToHexString(expectedHash).ToLowerInvariant();
 
