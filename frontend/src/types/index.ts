@@ -24,10 +24,12 @@ export interface Subsection {
 export interface Topic {
   id: string;
   subsectionId: string;
+  parentTopicId?: string;
   title: string;
   content: string;
   summary?: string;
   order: number;
+  childrenCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,10 +37,34 @@ export interface Topic {
 export interface TopicListItem {
   id: string;
   subsectionId: string;
+  parentTopicId?: string;
   title: string;
   summary?: string;
   order: number;
+  childrenCount: number;
   updatedAt: string;
+}
+
+export interface TopicTreeNode {
+  id: string;
+  title: string;
+  summary?: string;
+  hasContent: boolean;
+  order: number;
+  children: TopicTreeNode[];
+}
+
+export interface SubsectionTree {
+  id: string;
+  title: string;
+  topics: TopicTreeNode[];
+}
+
+export interface SectionTree {
+  id: string;
+  title: string;
+  icon: string;
+  subsections: SubsectionTree[];
 }
 
 export type TestMode = 'AI' | 'Self';

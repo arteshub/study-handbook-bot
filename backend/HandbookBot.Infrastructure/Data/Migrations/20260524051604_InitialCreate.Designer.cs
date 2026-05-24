@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace HandbookBot.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260524051210_InitialCreate")]
+    [Migration("20260524051604_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -250,6 +250,10 @@ namespace HandbookBot.Infrastructure.Data.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("order");
 
+                    b.Property<Guid?>("ParentTopicId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_topic_id");
+
                     b.Property<Guid>("SubsectionId")
                         .HasColumnType("uuid")
                         .HasColumnName("subsection_id");
@@ -270,6 +274,8 @@ namespace HandbookBot.Infrastructure.Data.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ParentTopicId");
 
                     b.HasIndex("SubsectionId");
 
@@ -354,6 +360,11 @@ namespace HandbookBot.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("HandbookBot.Domain.Entities.Topic", b =>
                 {
+                    b.HasOne("HandbookBot.Domain.Entities.Topic", null)
+                        .WithMany("Children")
+                        .HasForeignKey("ParentTopicId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("HandbookBot.Domain.Entities.Subsection", null)
                         .WithMany("Topics")
                         .HasForeignKey("SubsectionId")
@@ -374,6 +385,11 @@ namespace HandbookBot.Infrastructure.Data.Migrations
             modelBuilder.Entity("HandbookBot.Domain.Entities.TestSession", b =>
                 {
                     b.Navigation("Results");
+                });
+
+            modelBuilder.Entity("HandbookBot.Domain.Entities.Topic", b =>
+                {
+                    b.Navigation("Children");
                 });
 
             modelBuilder.Entity("HandbookBot.Domain.Entities.User", b =>

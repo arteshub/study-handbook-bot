@@ -1,6 +1,5 @@
 using HandbookBot.Application.Common.Exceptions;
 using HandbookBot.Application.Topics.Dtos;
-using HandbookBot.Domain.Entities;
 using HandbookBot.Domain.Repositories;
 using MediatR;
 
@@ -11,17 +10,14 @@ internal sealed class GetTopicByIdQueryHandler(IUnitOfWork uow)
 {
     public async Task<TopicDto> Handle(GetTopicByIdQuery request, CancellationToken ct)
     {
-        var topic = await uow.Topics.GetByIdAsync(request.Id, ct)
+        var topic = await uow.Topics.GetWithChildrenAsync(request.Id, ct)
             ?? throw new NotFoundException(nameof(Topic), request.Id);
 
-        var subsection = await uow.Subsections.GetByIdAsync(topic.SubsectionId, ct)
-            ?? throw new NotFoundException(nameof(Subsection), topic.SubsectionId);
+        var subsection = await uow.Subsections.GetByIdAsync(topic.SubsectionId, ct)!;
+        var section = await uow.Sections.GetByIdAsync(subsection!.SectionId, ct)!;
 
-        var section = await uow.Sections.GetByIdAsync(subsection.SectionId, ct)
-            ?? throw new NotFoundException(nameof(Section), subsection.SectionId);
+        if (section!.UserId != request.UserId) throw new ForbiddenException();
 
-        if (section.UserId != request.UserId) throw new ForbiddenException();
-
-        return new TopicDto(topic.Id, topic.SubsectionId, topic.Title, topic.Content, topic.Summary, topic.Order, topic.CreatedAt, topic.UpdatedAt);
+        return new TopicDto(topic.Id, topic.SubsectionId, topic.ParentTopicId, topic.Title, topic.Content, topic.Summary, topic.Order, topic.Children.Count, topic.CreatedAt, topic.UpdatedAt);
     }
 }

@@ -1,5 +1,4 @@
 using HandbookBot.Application.Common.Exceptions;
-using HandbookBot.Domain.Entities;
 using HandbookBot.Domain.Repositories;
 using MediatR;
 
@@ -18,8 +17,11 @@ internal sealed class CreateTopicCommandHandler(IUnitOfWork uow)
 
         if (section.UserId != request.UserId) throw new ForbiddenException();
 
-        var existing = await uow.Topics.GetBySubsectionIdAsync(request.SubsectionId, ct);
-        var topic = Topic.Create(request.SubsectionId, request.Title, request.Content, request.Summary, existing.Count);
+        var siblings = request.ParentTopicId.HasValue
+            ? await uow.Topics.GetChildrenAsync(request.ParentTopicId.Value, ct)
+            : await uow.Topics.GetRootsBySubsectionIdAsync(request.SubsectionId, ct);
+
+        var topic = Topic.Create(request.SubsectionId, request.Title, request.Content, request.Summary, siblings.Count, request.ParentTopicId);
 
         await uow.Topics.AddAsync(topic, ct);
         await uow.SaveChangesAsync(ct);

@@ -1,3 +1,4 @@
+using HandbookBot.Application.Sections.Queries.GetSectionTree;
 using HandbookBot.Application.Topics.Commands.CreateTopic;
 using HandbookBot.Application.Topics.Commands.DeleteTopic;
 using HandbookBot.Application.Topics.Commands.UpdateTopic;
@@ -10,17 +11,21 @@ namespace HandbookBot.API.Controllers;
 public sealed class TopicsController : BaseController
 {
     [HttpGet("/api/subsections/{subsectionId:guid}/topics")]
-    public async Task<IActionResult> GetAll(Guid subsectionId, CancellationToken ct) =>
-        Ok(await Mediator.Send(new GetTopicsQuery(subsectionId, CurrentUserId), ct));
+    public async Task<IActionResult> GetAll(Guid subsectionId, [FromQuery] Guid? parentTopicId, CancellationToken ct) =>
+        Ok(await Mediator.Send(new GetTopicsQuery(subsectionId, CurrentUserId, parentTopicId), ct));
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct) =>
         Ok(await Mediator.Send(new GetTopicByIdQuery(id, CurrentUserId), ct));
 
+    [HttpGet("/api/tree")]
+    public async Task<IActionResult> GetTree(CancellationToken ct) =>
+        Ok(await Mediator.Send(new GetSectionTreeQuery(CurrentUserId), ct));
+
     [HttpPost("/api/subsections/{subsectionId:guid}/topics")]
     public async Task<IActionResult> Create(Guid subsectionId, [FromBody] CreateTopicRequest req, CancellationToken ct)
     {
-        var id = await Mediator.Send(new CreateTopicCommand(subsectionId, CurrentUserId, req.Title, req.Content, req.Summary), ct);
+        var id = await Mediator.Send(new CreateTopicCommand(subsectionId, CurrentUserId, req.Title, req.Content, req.Summary, req.ParentTopicId), ct);
         return CreatedAtAction(nameof(GetById), new { id }, new { id });
     }
 
@@ -39,5 +44,5 @@ public sealed class TopicsController : BaseController
     }
 }
 
-public sealed record CreateTopicRequest(string Title, string Content, string? Summary);
+public sealed record CreateTopicRequest(string Title, string Content, string? Summary, Guid? ParentTopicId = null);
 public sealed record UpdateTopicRequest(string Title, string Content, string? Summary);

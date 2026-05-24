@@ -1,6 +1,5 @@
 using HandbookBot.Application.Common.Exceptions;
 using HandbookBot.Application.Topics.Dtos;
-using HandbookBot.Domain.Entities;
 using HandbookBot.Domain.Repositories;
 using MediatR;
 
@@ -19,12 +18,12 @@ internal sealed class GetTopicsQueryHandler(IUnitOfWork uow)
 
         if (section.UserId != request.UserId) throw new ForbiddenException();
 
-        var topics = await uow.Topics.GetBySubsectionIdAsync(request.SubsectionId, ct);
+        var topics = request.ParentTopicId.HasValue
+            ? await uow.Topics.GetChildrenAsync(request.ParentTopicId.Value, ct)
+            : await uow.Topics.GetRootsBySubsectionIdAsync(request.SubsectionId, ct);
 
         return topics
-            .OrderBy(t => t.Order)
-            .ThenBy(t => t.CreatedAt)
-            .Select(t => new TopicListItemDto(t.Id, t.SubsectionId, t.Title, t.Summary, t.Order, t.UpdatedAt))
+            .Select(t => new TopicListItemDto(t.Id, t.SubsectionId, t.ParentTopicId, t.Title, t.Summary, t.Order, t.Children.Count, t.UpdatedAt))
             .ToList();
     }
 }

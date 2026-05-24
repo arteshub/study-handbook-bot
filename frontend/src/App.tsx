@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Route, Routes } from 'react-router-dom';
+import { Map } from 'lucide-react';
 import WebApp from '@twa-dev/sdk';
 import { setUserId } from './api/client';
 import { BottomNav } from './components/BottomNav';
+import { TreeSidebar } from './components/TreeSidebar';
 import { HistoryPage } from './pages/HistoryPage';
 import { HomePage } from './pages/HomePage';
 import { SectionPage } from './pages/SectionPage';
@@ -18,6 +20,8 @@ const queryClient = new QueryClient({
 });
 
 export const App = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   useEffect(() => {
     WebApp.ready();
     WebApp.expand();
@@ -29,6 +33,15 @@ export const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="max-w-lg mx-auto">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed top-4 right-4 z-30 w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)] shadow-sm"
+        >
+          <Map size={18} className="opacity-60" />
+        </button>
+
+        <TreeSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/sections/:id" element={<SectionPage />} />

@@ -131,6 +131,7 @@ namespace HandbookBot.Infrastructure.Data.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     subsection_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    parent_topic_id = table.Column<Guid>(type: "uuid", nullable: true),
                     title = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
                     content = table.Column<string>(type: "text", nullable: false),
                     summary = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
@@ -145,6 +146,12 @@ namespace HandbookBot.Infrastructure.Data.Migrations
                         name: "FK_topics_subsections_subsection_id",
                         column: x => x.subsection_id,
                         principalTable: "subsections",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_topics_topics_parent_topic_id",
+                        column: x => x.parent_topic_id,
+                        principalTable: "topics",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -163,6 +170,11 @@ namespace HandbookBot.Infrastructure.Data.Migrations
                 name: "IX_test_results_session_id",
                 table: "test_results",
                 column: "session_id");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_topics_parent_topic_id",
+                table: "topics",
+                column: "parent_topic_id");
 
             migrationBuilder.CreateIndex(
                 name: "IX_topics_subsection_id",

@@ -7,4 +7,5 @@ public sealed record CreateTopicCommand(
     long UserId,
     string Title,
     string Content,
-    string? Summary) : IRequest<Guid>;
+    string? Summary,
+    Guid? ParentTopicId = null) : IRequest<Guid>;

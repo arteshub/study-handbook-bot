@@ -57,7 +57,7 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             var t = await uow.Topics.GetByIdAsync(req.TopicId.Value, ct);
             return t is null ? [] : [t];
         }
-        if (req.SubsectionId.HasValue) return await uow.Topics.GetBySubsectionIdAsync(req.SubsectionId.Value, ct);
+        if (req.SubsectionId.HasValue) return await uow.Topics.GetRootsBySubsectionIdAsync(req.SubsectionId.Value, ct);
         if (req.SectionId.HasValue) return await uow.Topics.GetBySectionIdAsync(req.SectionId.Value, ct);
 
         var sections = await uow.Sections.GetByUserIdAsync(req.UserId, ct);
