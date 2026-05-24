@@ -24,11 +24,10 @@ export const TestPage = () => {
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
   const [selectedSubsectionIds, setSelectedSubsectionIds] = useState<string[]>([]);
   const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
-  const [isReviewMode, setIsReviewMode] = useState(false);
   const [session, setSession] = useState<TestSession | null>(null);
   const [question, setQuestion] = useState<TestQuestion | null>(null);
   const [answerResult, setAnswerResult] = useState<TestAnswerResult | null>(null);
-  const [userAnswer, setUserAnswer] = useState('');
+  const [_userAnswer, setUserAnswer] = useState('');
   const [showAnswer, setShowAnswer] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [startError, setStartError] = useState('');
@@ -83,11 +82,10 @@ export const TestPage = () => {
     const raw = sessionStorage.getItem('activeTest');
     if (!raw) return;
     try {
-      const { id, isReview } = JSON.parse(raw) as { id: string; isReview: boolean };
+      const { id } = JSON.parse(raw) as { id: string };
       testsApi.getSession(id).then(s => {
         if (!s.isCompleted) {
           setSession(s);
-          setIsReviewMode(isReview);
           testsApi.getNextQuestion(s.id).then(q => {
             if (!q) {
               sessionStorage.removeItem('activeTest');
@@ -125,7 +123,7 @@ export const TestPage = () => {
   };
 
   const start = useMutation({
-    mutationFn: (reviewMode = false) => testsApi.startSession({
+    mutationFn: (reviewMode: boolean) => testsApi.startSession({
       mode: reviewMode ? 'Self' : mode,
       sectionIds: reviewMode || selectedSectionIds.length === 0 ? undefined : selectedSectionIds,
       subsectionIds: reviewMode || selectedSubsectionIds.length === 0 ? undefined : selectedSubsectionIds,
@@ -133,9 +131,8 @@ export const TestPage = () => {
       reviewMode,
     }),
     onSuccess: async (s, reviewMode) => {
-      sessionStorage.setItem('activeTest', JSON.stringify({ id: s.id, isReview: !!reviewMode }));
+      sessionStorage.setItem('activeTest', JSON.stringify({ id: s.id, isReview: reviewMode }));
       setSession(s);
-      setIsReviewMode(!!reviewMode);
       setStartError('');
       if (s.totalQuestions === 0) {
         setStartError('Нет тем с контентом в выбранной области. Добавь материал в темы.');
@@ -194,7 +191,6 @@ export const TestPage = () => {
     setShowChat(false);
     setSelectedOption(null);
     setStartError('');
-    setIsReviewMode(false);
     setSelectedSectionIds([]);
     setSelectedSubsectionIds([]);
     setSelectedTopicIds([]);

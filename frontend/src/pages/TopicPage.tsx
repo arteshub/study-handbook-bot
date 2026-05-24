@@ -5,7 +5,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import MDEditor from '@uiw/react-md-editor';
 import { topicsApi } from '../api/topics';
 import { exportApi } from '../api/export';
-import { TopicCard } from '../components/TopicCard';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
