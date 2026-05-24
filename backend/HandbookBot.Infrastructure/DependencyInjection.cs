@@ -4,16 +4,18 @@ using HandbookBot.Infrastructure.Bot;
 using HandbookBot.Infrastructure.Data;
 using HandbookBot.Infrastructure.Data.Repositories;
 using HandbookBot.Infrastructure.Services;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Telegram.Bot;
 
 namespace HandbookBot.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config, IWebHostEnvironment env)
     {
         services.AddDbContext<AppDbContext>(opt =>
             opt.UseNpgsql(ResolveConnectionString(config)));
@@ -25,7 +27,11 @@ public static class DependencyInjection
 
         var botToken = config["Telegram:BotToken"]!;
         services.AddSingleton<ITelegramBotClient>(_ => new TelegramBotClient(botToken));
-        services.AddHostedService<TelegramBotService>();
+        services.AddScoped<BotUpdateHandler>();
+
+        // Polling only in Development; Production uses webhook
+        if (env.IsDevelopment())
+            services.AddHostedService<TelegramBotService>();
 
         return services;
     }

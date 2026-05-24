@@ -9,7 +9,7 @@ using Telegram.Bot.Types.ReplyMarkups;
 
 namespace HandbookBot.Infrastructure.Bot;
 
-internal sealed class BotUpdateHandler(
+public sealed class BotUpdateHandler(
     ITelegramBotClient bot,
     IMediator mediator,
     IConfiguration config,
