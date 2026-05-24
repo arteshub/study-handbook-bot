@@ -43,6 +43,28 @@ export const TopicPage = () => {
     if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 50);
   }, [searchOpen]);
 
+  // Browser-like keyboard shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Ctrl/Cmd+F — open search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+      if (!searchOpen) return;
+      // Escape — close
+      if (e.key === 'Escape') { e.preventDefault(); closeSearch(); return; }
+      // Enter / F3 — next; Shift+Enter / Shift+F3 — prev
+      if (e.key === 'Enter' || e.key === 'F3') {
+        e.preventDefault();
+        e.shiftKey ? prev() : next();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [searchOpen, next, prev]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const closeSearch = () => {
     clear();
     setSearchOpen(false);
