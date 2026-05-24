@@ -1,6 +1,9 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using HandbookBot.Application.Common.Interfaces;
 using HandbookBot.Application.Tests.Dtos;
+using HandbookBot.Domain.Entities;
 using HandbookBot.Domain.Enums;
 using HandbookBot.Domain.Repositories;
 using MediatR;
@@ -28,11 +31,34 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
         {
             if (string.IsNullOrWhiteSpace(topic.Content)) continue;
 
+            var contentHash = ComputeHash(topic.Content);
             int count = QuestionsCountForContent(topic.Content, request.QuestionsPerTopic);
 
             if (request.Mode == TestMode.AI)
             {
-                var qas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, count, ct);
+                var cached = await uow.CachedQuestions.GetAsync(topic.Id, TestMode.AI, contentHash, ct);
+                IReadOnlyList<(string Question, IReadOnlyList<AiOption> Options)> qas;
+
+                if (cached.Count >= count)
+                {
+                    // Use cached questions (take a random subset to vary each session)
+                    qas = cached
+                        .OrderBy(_ => Guid.NewGuid())
+                        .Take(count)
+                        .Select(q => ((string)q.QuestionText, (IReadOnlyList<AiOption>)DeserializeOptions(q.OptionsJson!)))
+                        .ToList();
+                }
+                else
+                {
+                    // Generate and cache
+                    await uow.CachedQuestions.DeleteStaleAsync(topic.Id, TestMode.AI, contentHash, ct);
+                    qas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, count, ct);
+                    var toCache = qas.Select(q =>
+                        CachedQuestion.CreateAi(topic.Id, contentHash, q.Question,
+                            JsonSerializer.Serialize(q.Options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }))));
+                    await uow.CachedQuestions.AddRangeAsync(toCache, ct);
+                }
+
                 foreach (var (question, options) in qas)
                 {
                     var optionsJson = JsonSerializer.Serialize(options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }));
@@ -41,7 +67,25 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             }
             else
             {
-                var qas = await aiService.GenerateSelfTestQuestionsAsync(topic.Title, topic.Content, count, ct);
+                var cached = await uow.CachedQuestions.GetAsync(topic.Id, TestMode.Self, contentHash, ct);
+                IReadOnlyList<(string Question, string ModelAnswer)> qas;
+
+                if (cached.Count >= count)
+                {
+                    qas = cached
+                        .OrderBy(_ => Guid.NewGuid())
+                        .Take(count)
+                        .Select(q => (q.QuestionText, q.ModelAnswer ?? string.Empty))
+                        .ToList();
+                }
+                else
+                {
+                    await uow.CachedQuestions.DeleteStaleAsync(topic.Id, TestMode.Self, contentHash, ct);
+                    qas = await aiService.GenerateSelfTestQuestionsAsync(topic.Title, topic.Content, count, ct);
+                    var toCache = qas.Select(q => CachedQuestion.CreateSelf(topic.Id, contentHash, q.Question, q.ModelAnswer));
+                    await uow.CachedQuestions.AddRangeAsync(toCache, ct);
+                }
+
                 results.AddRange(qas.Select(qa => TestResult.Create(session.Id, topic.Id, qa.Question, qa.ModelAnswer, order++)));
             }
         }
@@ -51,6 +95,23 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
         await uow.SaveChangesAsync(ct);
 
         return new TestSessionDto(session.Id, session.Mode, session.TotalQuestions, 0, 0, false, session.CreatedAt, null);
+    }
+
+    private static string ComputeHash(string content)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(content));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static IReadOnlyList<AiOption> DeserializeOptions(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.EnumerateArray()
+            .Select(el => new AiOption(
+                el.GetProperty("Text").GetString()!,
+                el.GetProperty("IsCorrect").GetBoolean(),
+                el.GetProperty("Explanation").GetString()!))
+            .ToList();
     }
 
     private async Task<IReadOnlyList<Topic>> CollectTopicsAsync(StartTestSessionCommand req, CancellationToken ct)

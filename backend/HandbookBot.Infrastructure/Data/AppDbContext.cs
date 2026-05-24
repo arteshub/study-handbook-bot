@@ -14,6 +14,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<TestResult> TestResults => Set<TestResult>();
     public DbSet<TopicLink> TopicLinks => Set<TopicLink>();
     public DbSet<TopicProgress> TopicProgress => Set<TopicProgress>();
+    public DbSet<CachedQuestion> CachedQuestions => Set<CachedQuestion>();
 
     protected override void OnModelCreating(ModelBuilder builder) =>
         builder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());

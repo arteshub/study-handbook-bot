@@ -9,6 +9,7 @@ public interface IUnitOfWork
     ITestSessionRepository TestSessions { get; }
     ITestResultRepository TestResults { get; }
     ITopicProgressRepository TopicProgress { get; }
+    ICachedQuestionRepository CachedQuestions { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
