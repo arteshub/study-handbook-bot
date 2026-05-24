@@ -45,8 +45,8 @@ public sealed class BotUpdateHandler(
 
         await bot.SendMessage(
             chatId,
-            $"👋 Привет, *{firstName}*\\!\n\nЯ твой личный справочник знаний\\.\nСоздавай разделы, добавляй темы и проверяй себя через тесты\\!\n\n*Нажми кнопку* чтобы открыть интерфейс 👇",
-            parseMode: ParseMode.MarkdownV2,
+            $"👋 Привет, <b>{System.Web.HttpUtility.HtmlEncode(firstName)}</b>!\n\nЯ твой личный справочник знаний.\nСоздавай разделы, добавляй темы и проверяй себя через тесты!\n\n<b>Нажми кнопку</b> чтобы открыть интерфейс 👇",
+            parseMode: ParseMode.Html,
             replyMarkup: keyboard,
             cancellationToken: ct);
     }
