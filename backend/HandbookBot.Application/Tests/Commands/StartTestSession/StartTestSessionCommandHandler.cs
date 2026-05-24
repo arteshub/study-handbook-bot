@@ -7,10 +7,11 @@ using HandbookBot.Domain.Entities;
 using HandbookBot.Domain.Enums;
 using HandbookBot.Domain.Repositories;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace HandbookBot.Application.Tests.Commands.StartTestSession;
 
-internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService aiService)
+internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService aiService, IServiceScopeFactory scopeFactory)
     : IRequestHandler<StartTestSessionCommand, TestSessionDto>
 {
     public async Task<TestSessionDto> Handle(StartTestSessionCommand request, CancellationToken ct)
@@ -24,9 +25,6 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             request.TopicIds is { Count: 1 } ? request.TopicIds[0] : null);
         await uow.TestSessions.AddAsync(session, ct);
 
-        // AI calls use a separate token: if the HTTP request is cancelled (client timeout),
-        // the server still completes generation and saves to cache.
-        // Next request will be instant (cache hit).
         using var aiCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var aiCt = aiCts.Token;
 
@@ -55,12 +53,14 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
                 }
                 else
                 {
-                    await uow.CachedQuestions.DeleteStaleAsync(topic.Id, TestMode.AI, contentHash, aiCt);
                     qas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, count, aiCt);
+
+                    // Save to cache in a fresh scope so it persists even if the request scope is disposed
                     var toCache = qas.Select(q =>
                         CachedQuestion.CreateAi(topic.Id, contentHash, q.Question,
-                            JsonSerializer.Serialize(q.Options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }))));
-                    await uow.CachedQuestions.AddRangeAsync(toCache, aiCt);
+                            JsonSerializer.Serialize(q.Options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }))))
+                        .ToList();
+                    _ = SaveCacheAsync(topic.Id, TestMode.AI, contentHash, toCache, aiCt);
                 }
 
                 foreach (var (question, options) in qas)
@@ -84,10 +84,10 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
                 }
                 else
                 {
-                    await uow.CachedQuestions.DeleteStaleAsync(topic.Id, TestMode.Self, contentHash, aiCt);
                     qas = await aiService.GenerateSelfTestQuestionsAsync(topic.Title, topic.Content, count, aiCt);
-                    var toCache = qas.Select(q => CachedQuestion.CreateSelf(topic.Id, contentHash, q.Question, q.ModelAnswer));
-                    await uow.CachedQuestions.AddRangeAsync(toCache, aiCt);
+
+                    var toCache = qas.Select(q => CachedQuestion.CreateSelf(topic.Id, contentHash, q.Question, q.ModelAnswer)).ToList();
+                    _ = SaveCacheAsync(topic.Id, TestMode.Self, contentHash, toCache, aiCt);
                 }
 
                 results.AddRange(qas.Select(qa => TestResult.Create(session.Id, topic.Id, qa.Question, qa.ModelAnswer, order++)));
@@ -95,10 +95,25 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
         }
 
         session.SetTotalQuestions(results.Count);
-        await uow.TestResults.AddRangeAsync(results, aiCt);
-        await uow.SaveChangesAsync(aiCt);
+        await uow.TestResults.AddRangeAsync(results, ct);
+        await uow.SaveChangesAsync(ct);
 
         return new TestSessionDto(session.Id, session.Mode, session.TotalQuestions, 0, 0, false, session.CreatedAt, null);
+    }
+
+    // Saves generated questions to cache in a new DI scope,
+    // independent of the HTTP request scope (which may be disposed on client timeout).
+    private async Task SaveCacheAsync(Guid topicId, TestMode mode, string contentHash, IReadOnlyList<CachedQuestion> questions, CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var cacheUow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await cacheUow.CachedQuestions.DeleteStaleAsync(topicId, mode, contentHash, ct);
+            await cacheUow.CachedQuestions.AddRangeAsync(questions, ct);
+            await cacheUow.SaveChangesAsync(ct);
+        }
+        catch { /* cache save is best-effort; next request will regenerate */ }
     }
 
     private static string ComputeHash(string content)
