@@ -24,6 +24,12 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             request.TopicIds is { Count: 1 } ? request.TopicIds[0] : null);
         await uow.TestSessions.AddAsync(session, ct);
 
+        // AI calls use a separate token: if the HTTP request is cancelled (client timeout),
+        // the server still completes generation and saves to cache.
+        // Next request will be instant (cache hit).
+        using var aiCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var aiCt = aiCts.Token;
+
         var results = new List<TestResult>();
         int order = 0;
 
@@ -41,7 +47,6 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
 
                 if (cached.Count >= count)
                 {
-                    // Use cached questions (take a random subset to vary each session)
                     qas = cached
                         .OrderBy(_ => Guid.NewGuid())
                         .Take(count)
@@ -50,13 +55,12 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
                 }
                 else
                 {
-                    // Generate and cache
-                    await uow.CachedQuestions.DeleteStaleAsync(topic.Id, TestMode.AI, contentHash, ct);
-                    qas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, count, ct);
+                    await uow.CachedQuestions.DeleteStaleAsync(topic.Id, TestMode.AI, contentHash, aiCt);
+                    qas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, count, aiCt);
                     var toCache = qas.Select(q =>
                         CachedQuestion.CreateAi(topic.Id, contentHash, q.Question,
                             JsonSerializer.Serialize(q.Options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }))));
-                    await uow.CachedQuestions.AddRangeAsync(toCache, ct);
+                    await uow.CachedQuestions.AddRangeAsync(toCache, aiCt);
                 }
 
                 foreach (var (question, options) in qas)
@@ -80,10 +84,10 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
                 }
                 else
                 {
-                    await uow.CachedQuestions.DeleteStaleAsync(topic.Id, TestMode.Self, contentHash, ct);
-                    qas = await aiService.GenerateSelfTestQuestionsAsync(topic.Title, topic.Content, count, ct);
+                    await uow.CachedQuestions.DeleteStaleAsync(topic.Id, TestMode.Self, contentHash, aiCt);
+                    qas = await aiService.GenerateSelfTestQuestionsAsync(topic.Title, topic.Content, count, aiCt);
                     var toCache = qas.Select(q => CachedQuestion.CreateSelf(topic.Id, contentHash, q.Question, q.ModelAnswer));
-                    await uow.CachedQuestions.AddRangeAsync(toCache, ct);
+                    await uow.CachedQuestions.AddRangeAsync(toCache, aiCt);
                 }
 
                 results.AddRange(qas.Select(qa => TestResult.Create(session.Id, topic.Id, qa.Question, qa.ModelAnswer, order++)));
@@ -91,8 +95,8 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
         }
 
         session.SetTotalQuestions(results.Count);
-        await uow.TestResults.AddRangeAsync(results, ct);
-        await uow.SaveChangesAsync(ct);
+        await uow.TestResults.AddRangeAsync(results, aiCt);
+        await uow.SaveChangesAsync(aiCt);
 
         return new TestSessionDto(session.Id, session.Mode, session.TotalQuestions, 0, 0, false, session.CreatedAt, null);
     }
