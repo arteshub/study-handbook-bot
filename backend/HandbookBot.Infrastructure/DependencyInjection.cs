@@ -32,16 +32,18 @@ public static class DependencyInjection
 
     private static string ResolveConnectionString(IConfiguration config)
     {
-        // Standard .NET connection string
+        // Railway/Heroku DATABASE_URL takes priority over appsettings (which may contain docker-compose hostname)
+        var url = config["DATABASE_URL"];
+        if (!string.IsNullOrEmpty(url))
+        {
+            var uri = new Uri(url);
+            var userInfo = uri.UserInfo.Split(':');
+            return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+        }
+
         var cs = config.GetConnectionString("DefaultConnection");
         if (!string.IsNullOrEmpty(cs)) return cs;
 
-        // Railway / Heroku style: postgresql://user:pass@host:port/db
-        var url = config["DATABASE_URL"];
-        if (string.IsNullOrEmpty(url)) throw new InvalidOperationException("No database connection string configured.");
-
-        var uri = new Uri(url);
-        var userInfo = uri.UserInfo.Split(':');
-        return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+        throw new InvalidOperationException("No database connection string configured. Set DATABASE_URL or ConnectionStrings__DefaultConnection.");
     }
 }
