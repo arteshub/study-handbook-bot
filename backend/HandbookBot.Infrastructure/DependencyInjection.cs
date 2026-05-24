@@ -27,7 +27,6 @@ public static class DependencyInjection
 
         var botToken = config["Telegram:BotToken"]!;
         services.AddSingleton<ITelegramBotClient>(_ => new TelegramBotClient(botToken));
-        services.AddScoped<BotUpdateHandler>();
 
         // Polling only in Development; Production uses webhook
         if (env.IsDevelopment())

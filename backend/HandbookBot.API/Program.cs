@@ -42,9 +42,12 @@ app.MapFallbackToFile("index.html");
 
 if (app.Environment.IsProduction())
 {
-    var bot = app.Services.GetRequiredService<Telegram.Bot.ITelegramBotClient>();
-    var webhookUrl = $"{app.Configuration["WebApp:Url"]}/api/telegram/webhook";
-    await bot.SetWebhook(webhookUrl);
+    var webAppUrl = app.Configuration["WebApp:Url"];
+    if (!string.IsNullOrEmpty(webAppUrl))
+    {
+        var bot = app.Services.GetRequiredService<Telegram.Bot.ITelegramBotClient>();
+        await bot.SetWebhook($"{webAppUrl}/api/telegram/webhook");
+    }
 }
 
 app.Run();
