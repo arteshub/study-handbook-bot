@@ -1,5 +1,6 @@
 using HandbookBot.Application.Review.Queries.GetReviewStats;
 using HandbookBot.Application.Tests.Commands.CompleteTestSession;
+using HandbookBot.Application.Tests.Commands.SkipQuestion;
 using HandbookBot.Application.Tests.Commands.SkipTopic;
 using HandbookBot.Application.Tests.Commands.StartTestSession;
 using HandbookBot.Application.Tests.Commands.SubmitAnswer;
@@ -52,6 +53,13 @@ public sealed class TestsController : BaseController
     public async Task<IActionResult> SkipTopic(Guid id, Guid topicId, CancellationToken ct)
     {
         await Mediator.Send(new SkipTopicCommand(id, topicId, CurrentUserId), ct);
+        return NoContent();
+    }
+
+    [HttpPost("sessions/{id:guid}/skip-question/{resultId:guid}")]
+    public async Task<IActionResult> SkipQuestion(Guid id, Guid resultId, CancellationToken ct)
+    {
+        await Mediator.Send(new SkipQuestionCommand(id, resultId, CurrentUserId), ct);
         return NoContent();
     }
 

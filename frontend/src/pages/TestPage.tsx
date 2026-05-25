@@ -175,6 +175,17 @@ export const TestPage = () => {
     }
   };
 
+  const skipQuestion = async () => {
+    if (!session || !question) return;
+    setSkipping(true);
+    try {
+      await testsApi.skipQuestion(session.id, question.resultId);
+      await loadQuestion(session);
+    } finally {
+      setSkipping(false);
+    }
+  };
+
   const nextQuestion = async () => {
     if (!session) return;
     await loadQuestion(session);
@@ -400,7 +411,19 @@ export const TestPage = () => {
           /* Self mode — think in your head, then reveal */
           <>
             {!showAnswer
-              ? <Button fullWidth variant="secondary" onClick={() => setShowAnswer(true)}>Показать ответ</Button>
+              ? (
+                <div className="flex flex-col gap-2">
+                  <Button fullWidth variant="secondary" onClick={() => setShowAnswer(true)}>Показать ответ</Button>
+                  <button
+                    onClick={skipQuestion}
+                    disabled={skipping}
+                    className="w-full py-2.5 rounded-xl text-sm opacity-40 hover:opacity-60 transition-opacity flex items-center justify-center gap-1.5 disabled:opacity-20"
+                  >
+                    <SkipForward size={14} />
+                    Пропустить вопрос
+                  </button>
+                </div>
+              )
               : (
                 <>
                   <div className="mb-4 p-3 rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)]">

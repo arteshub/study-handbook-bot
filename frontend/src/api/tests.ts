@@ -30,6 +30,9 @@ export const testsApi = {
   skipTopic: (sessionId: string, topicId: string) =>
     apiClient.post(`/tests/sessions/${sessionId}/skip-topic/${topicId}`),
 
+  skipQuestion: (sessionId: string, resultId: string) =>
+    apiClient.post(`/tests/sessions/${sessionId}/skip-question/${resultId}`),
+
   complete: (sessionId: string) =>
     apiClient.post<TestSession>(`/tests/sessions/${sessionId}/complete`).then(r => r.data),
 

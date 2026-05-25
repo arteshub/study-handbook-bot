@@ -36,7 +36,7 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             if (string.IsNullOrWhiteSpace(topic.Content)) continue;
 
             var contentHash = ComputeHash(topic.Content);
-            int count = QuestionsCountForContent(topic.Content, request.QuestionsPerTopic);
+            int count = QuestionsCountForContent(topic.Content, request.Mode);
 
             if (request.Mode == TestMode.AI)
             {
@@ -176,13 +176,22 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
         return all;
     }
 
-    private static int QuestionsCountForContent(string content, int _)
+    private static int QuestionsCountForContent(string content, TestMode mode)
     {
         var len = content.Length;
-        if (len < 500)  return 5;
-        if (len < 2000) return 7;
-        if (len < 5000) return 9;
-        return 12;
+        if (mode == TestMode.AI)
+        {
+            if (len < 500)   return 15;
+            if (len < 2000)  return 21;
+            if (len < 5000)  return 28;
+            return 35;
+        }
+        // Self mode — Q+A is much more token-efficient, so higher counts are feasible
+        if (len < 500)   return 21;
+        if (len < 2000)  return 30;
+        if (len < 5000)  return 50;
+        if (len < 10000) return 70;
+        return 100;
     }
 
     private async Task CollectRecursiveAsync(Guid topicId, List<Topic> result, CancellationToken ct)

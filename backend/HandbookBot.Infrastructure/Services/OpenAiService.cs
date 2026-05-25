@@ -10,8 +10,8 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
     private string ApiKey => config["OpenAI:ApiKey"] ?? throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
 
     // Self mode gets more content since output is smaller (no options)
-    private const int MaxContentCharsSelf = 6000;
-    private const int MaxContentCharsAi = 3000;
+    private const int MaxContentCharsSelf = 12000;
+    private const int MaxContentCharsAi = 6000;
 
     public async Task<IReadOnlyList<(string Question, IReadOnlyList<AiOption> Options)>> GenerateQuestionsAsync(
         string topicTitle, string topicContent, int count, CancellationToken ct = default)
@@ -29,8 +29,8 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
             $"Верни ТОЛЬКО JSON-массив без markdown и пояснений:\n" +
             $"[{{\"question\":\"...\",\"options\":[{{\"text\":\"...\",\"isCorrect\":false,\"explanation\":\"...\"}},...]}}]";
 
-        // Russian text costs ~2x more tokens than English; each question has 4 options + explanations
-        var outputTokens = Math.Min(1000 + count * 1100, 16000);
+        // Russian text costs ~2x more tokens than English; each question has 4 options + explanations (~550 tokens each)
+        var outputTokens = Math.Min(1000 + count * 550, 16000);
         var options = new ChatCompletionOptions { MaxOutputTokenCount = outputTokens };
         var response = await client.CompleteChatAsync([new UserChatMessage(prompt)], options, ct);
         var raw = response.Value.Content[0].Text.Trim();
@@ -76,7 +76,8 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
             $"Верни ТОЛЬКО JSON-массив без markdown:\n" +
             $"[{{\"question\":\"...\",\"modelAnswer\":\"...\"}}]";
 
-        var outputTokens = Math.Min(600 + count * 300, 5000);
+        // Each Q+A pair is ~200 tokens in Russian
+        var outputTokens = Math.Min(300 + count * 200, 16000);
         var options = new ChatCompletionOptions { MaxOutputTokenCount = outputTokens };
         var response = await client.CompleteChatAsync([new UserChatMessage(prompt)], options, ct);
         var json = ExtractJsonArray(response.Value.Content[0].Text.Trim());
