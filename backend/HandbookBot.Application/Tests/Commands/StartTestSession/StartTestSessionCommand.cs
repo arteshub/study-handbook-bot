@@ -11,4 +11,5 @@ public sealed record StartTestSessionCommand(
     IReadOnlyList<Guid>? SubsectionIds,
     IReadOnlyList<Guid>? TopicIds,
     bool ReviewMode = false,
-    int QuestionsPerTopic = 3) : IRequest<TestSessionDto>;
+    int QuestionsPerTopic = 3,
+    bool WrongAnswersMode = false) : IRequest<TestSessionDto>;

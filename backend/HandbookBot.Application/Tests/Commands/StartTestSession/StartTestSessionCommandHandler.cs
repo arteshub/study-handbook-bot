@@ -16,15 +16,53 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
 {
     public async Task<TestSessionDto> Handle(StartTestSessionCommand request, CancellationToken ct)
     {
-        var topics = await CollectTopicsAsync(request, ct);
-        if (topics.Count == 0) throw new InvalidOperationException("No topics found for the selected scope.");
-
         var session = TestSession.Create(request.UserId, request.Mode,
             request.SectionIds is { Count: 1 } ? request.SectionIds[0] : null,
             request.SubsectionIds is { Count: 1 } ? request.SubsectionIds[0] : null,
             request.TopicIds is { Count: 1 } ? request.TopicIds[0] : null);
         await uow.TestSessions.AddAsync(session, ct);
 
+        List<TestResult> results;
+
+        if (request.WrongAnswersMode)
+        {
+            results = await BuildWrongAnswerResultsAsync(session, request.UserId, ct);
+        }
+        else
+        {
+            var topics = await CollectTopicsAsync(request, ct);
+            if (topics.Count == 0) throw new InvalidOperationException("No topics found for the selected scope.");
+            results = await BuildNormalResultsAsync(session, topics, request.Mode, ct);
+        }
+
+        session.SetTotalQuestions(results.Count);
+        await uow.TestResults.AddRangeAsync(results, ct);
+        await uow.SaveChangesAsync(ct);
+
+        return new TestSessionDto(session.Id, session.Mode, session.TotalQuestions, 0, 0, false, session.CreatedAt, null);
+    }
+
+    private async Task<List<TestResult>> BuildWrongAnswerResultsAsync(TestSession session, long userId, CancellationToken ct)
+    {
+        var topicIds = await uow.TestResults.GetTopicsWithWrongAnswersAsync(userId, ct);
+
+        var pool = new List<(Guid TopicId, string Question, string ModelAnswer)>();
+        foreach (var topicId in topicIds)
+        {
+            var cached = await uow.CachedQuestions.GetAllByTopicAsync(topicId, TestMode.Self, ct);
+            foreach (var q in cached)
+                pool.Add((topicId, q.QuestionText, q.ModelAnswer ?? string.Empty));
+        }
+
+        int order = 0;
+        return pool
+            .OrderBy(_ => Guid.NewGuid())
+            .Select(x => TestResult.Create(session.Id, x.TopicId, x.Question, x.ModelAnswer, order++))
+            .ToList();
+    }
+
+    private async Task<List<TestResult>> BuildNormalResultsAsync(TestSession session, IReadOnlyList<Topic> topics, TestMode mode, CancellationToken ct)
+    {
         using var aiCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var aiCt = aiCts.Token;
 
@@ -36,14 +74,14 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             if (string.IsNullOrWhiteSpace(topic.Content)) continue;
 
             var contentHash = ComputeHash(topic.Content);
-            int count = QuestionsCountForContent(topic.Content, request.Mode);
+            int count = QuestionsCountForContent(topic.Content, mode);
 
-            if (request.Mode == TestMode.AI)
+            if (mode == TestMode.AI)
             {
                 var cached = await uow.CachedQuestions.GetAsync(topic.Id, TestMode.AI, contentHash, ct);
                 IReadOnlyList<(string Question, IReadOnlyList<AiOption> Options)> qas;
 
-                if (cached.Count >= count)
+                if (cached.Count > 0)
                 {
                     qas = cached
                         .OrderBy(_ => Guid.NewGuid())
@@ -55,7 +93,6 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
                 {
                     qas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, count, aiCt);
 
-                    // Save to cache in a fresh scope so it persists even if the request scope is disposed
                     var toCache = qas.Select(q =>
                         CachedQuestion.CreateAi(topic.Id, contentHash, q.Question,
                             JsonSerializer.Serialize(q.Options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }))))
@@ -74,7 +111,7 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
                 var cached = await uow.CachedQuestions.GetAsync(topic.Id, TestMode.Self, contentHash, ct);
                 IReadOnlyList<(string Question, string ModelAnswer)> qas;
 
-                if (cached.Count >= count)
+                if (cached.Count > 0)
                 {
                     qas = cached
                         .OrderBy(_ => Guid.NewGuid())
@@ -94,11 +131,7 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             }
         }
 
-        session.SetTotalQuestions(results.Count);
-        await uow.TestResults.AddRangeAsync(results, ct);
-        await uow.SaveChangesAsync(ct);
-
-        return new TestSessionDto(session.Id, session.Mode, session.TotalQuestions, 0, 0, false, session.CreatedAt, null);
+        return results;
     }
 
     // Saves generated questions to cache in a new DI scope,
@@ -203,4 +236,5 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
         foreach (var child in children)
             await CollectRecursiveAsync(child.Id, result, ct);
     }
+
 }

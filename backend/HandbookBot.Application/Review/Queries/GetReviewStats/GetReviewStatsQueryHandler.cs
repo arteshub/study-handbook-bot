@@ -1,3 +1,4 @@
+using HandbookBot.Domain.Enums;
 using HandbookBot.Domain.Repositories;
 using MediatR;
 
@@ -9,6 +10,10 @@ internal sealed class GetReviewStatsQueryHandler(IUnitOfWork uow)
     public async Task<ReviewStatsDto> Handle(GetReviewStatsQuery request, CancellationToken ct)
     {
         var dueCount = await uow.TopicProgress.GetDueCountAsync(request.UserId, ct);
-        return new ReviewStatsDto(dueCount, 0);
+
+        var wrongTopicIds = await uow.TestResults.GetTopicsWithWrongAnswersAsync(request.UserId, ct);
+        var wrongCount = await uow.CachedQuestions.CountByTopicsAsync(wrongTopicIds, TestMode.Self, ct);
+
+        return new ReviewStatsDto(dueCount, 0, wrongCount);
     }
 }

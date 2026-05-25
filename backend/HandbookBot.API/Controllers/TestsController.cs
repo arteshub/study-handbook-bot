@@ -22,7 +22,8 @@ public sealed class TestsController : BaseController
     public async Task<IActionResult> Start([FromBody] StartTestRequest req, CancellationToken ct)
     {
         var session = await Mediator.Send(new StartTestSessionCommand(
-            CurrentUserId, req.Mode, req.SectionIds, req.SubsectionIds, req.TopicIds, req.ReviewMode, req.QuestionsPerTopic), ct);
+            CurrentUserId, req.Mode, req.SectionIds, req.SubsectionIds, req.TopicIds,
+            req.ReviewMode, req.QuestionsPerTopic, req.WrongAnswersMode), ct);
         return Created($"/api/tests/sessions/{session.Id}", session);
     }
 
@@ -74,7 +75,8 @@ public sealed record StartTestRequest(
     List<Guid>? SubsectionIds,
     List<Guid>? TopicIds,
     bool ReviewMode = false,
-    int QuestionsPerTopic = 3);
+    int QuestionsPerTopic = 3,
+    bool WrongAnswersMode = false);
 
 public sealed record SubmitAnswerRequest(
     Guid ResultId,

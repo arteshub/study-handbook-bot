@@ -12,6 +12,17 @@ internal sealed class CachedQuestionRepository(AppDbContext db) : ICachedQuestio
             .Where(q => q.TopicId == topicId && q.Mode == mode && q.ContentHash == contentHash)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<CachedQuestion>> GetAllByTopicAsync(Guid topicId, TestMode mode, CancellationToken ct = default) =>
+        await db.CachedQuestions
+            .Where(q => q.TopicId == topicId && q.Mode == mode)
+            .ToListAsync(ct);
+
+    public async Task<int> CountByTopicsAsync(IReadOnlyList<Guid> topicIds, TestMode mode, CancellationToken ct = default) =>
+        topicIds.Count == 0 ? 0 :
+        await db.CachedQuestions
+            .Where(q => topicIds.Contains(q.TopicId) && q.Mode == mode)
+            .CountAsync(ct);
+
     public async Task AddRangeAsync(IEnumerable<CachedQuestion> questions, CancellationToken ct = default) =>
         await db.CachedQuestions.AddRangeAsync(questions, ct);
 

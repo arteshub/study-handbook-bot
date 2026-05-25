@@ -123,19 +123,20 @@ export const TestPage = () => {
   };
 
   const start = useMutation({
-    mutationFn: (reviewMode: boolean) => testsApi.startSession({
-      mode: reviewMode ? 'Self' : mode,
-      sectionIds: reviewMode || selectedSectionIds.length === 0 ? undefined : selectedSectionIds,
-      subsectionIds: reviewMode || selectedSubsectionIds.length === 0 ? undefined : selectedSubsectionIds,
-      topicIds: reviewMode || selectedTopicIds.length === 0 ? undefined : selectedTopicIds,
-      reviewMode,
+    mutationFn: (opts: { reviewMode?: boolean; wrongAnswersMode?: boolean }) => testsApi.startSession({
+      mode: opts.reviewMode || opts.wrongAnswersMode ? 'Self' : mode,
+      sectionIds: opts.reviewMode || opts.wrongAnswersMode || selectedSectionIds.length === 0 ? undefined : selectedSectionIds,
+      subsectionIds: opts.reviewMode || opts.wrongAnswersMode || selectedSubsectionIds.length === 0 ? undefined : selectedSubsectionIds,
+      topicIds: opts.reviewMode || opts.wrongAnswersMode || selectedTopicIds.length === 0 ? undefined : selectedTopicIds,
+      reviewMode: opts.reviewMode ?? false,
+      wrongAnswersMode: opts.wrongAnswersMode ?? false,
     }),
-    onSuccess: async (s, reviewMode) => {
-      sessionStorage.setItem('activeTest', JSON.stringify({ id: s.id, isReview: reviewMode }));
+    onSuccess: async (s) => {
+      sessionStorage.setItem('activeTest', JSON.stringify({ id: s.id }));
       setSession(s);
       setStartError('');
       if (s.totalQuestions === 0) {
-        setStartError('Нет тем с контентом в выбранной области. Добавь материал в темы.');
+        setStartError('Нет вопросов для этого режима. Пройди тест и пометь что-то как "не знал".');
         sessionStorage.removeItem('activeTest');
         return;
       }
@@ -226,7 +227,7 @@ export const TestPage = () => {
 
         {(reviewStats?.dueCount ?? 0) > 0 && (
           <button
-            onClick={() => start.mutate(true)}
+            onClick={() => start.mutate({ reviewMode: true })}
             disabled={start.isPending}
             className="flex items-center gap-3 p-4 rounded-2xl bg-[var(--tg-theme-button-color,#2481cc)] text-white text-left"
           >
@@ -240,12 +241,28 @@ export const TestPage = () => {
         )}
 
         {(reviewStats?.dueCount ?? 0) === 0 && reviewStats !== undefined && (
-          <div className="flex items-center gap-3 p-4 rounded-2xl bg-green-50 border border-green-100">
-            <span className="text-2xl">✅</span>
-            <div>
-              <p className="font-semibold text-green-700">Всё повторено!</p>
-              <p className="text-sm text-green-600 opacity-80">Новые повторения появятся позже</p>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-green-50 border border-green-100">
+              <span className="text-2xl">✅</span>
+              <div>
+                <p className="font-semibold text-green-700">Всё повторено!</p>
+                <p className="text-sm text-green-600 opacity-80">Новые повторения появятся позже</p>
+              </div>
             </div>
+            {(reviewStats.wrongCount ?? 0) > 0 && (
+              <button
+                onClick={() => start.mutate({ wrongAnswersMode: true })}
+                disabled={start.isPending}
+                className="flex items-center gap-3 p-4 rounded-2xl bg-red-50 border border-red-100 text-left hover:bg-red-100 transition-colors"
+              >
+                <span className="text-2xl">🔥</span>
+                <div className="flex-1">
+                  <p className="font-bold text-base text-red-700">Отработать ошибки</p>
+                  <p className="text-sm text-red-600 opacity-80">{reviewStats.wrongCount} {reviewStats.wrongCount === 1 ? 'вопрос' : reviewStats.wrongCount < 5 ? 'вопроса' : 'вопросов'} из кеша</p>
+                </div>
+                <span className="text-2xl font-bold opacity-40 text-red-500">→</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -338,7 +355,7 @@ export const TestPage = () => {
         </Card>
 
         {startError && <div className="p-3 rounded-xl bg-red-50 text-sm text-red-500">{startError}</div>}
-        <Button fullWidth size="lg" loading={start.isPending} onClick={() => start.mutate(false)}>Начать тест</Button>
+        <Button fullWidth size="lg" loading={start.isPending} onClick={() => start.mutate({})}>Начать тест</Button>
       </div>
     </div>
   );

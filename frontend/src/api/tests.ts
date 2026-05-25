@@ -3,7 +3,7 @@ import { apiClient } from './client';
 
 export const testsApi = {
   getReviewStats: () =>
-    apiClient.get<{ dueCount: number }>('/tests/review/stats').then(r => r.data),
+    apiClient.get<{ dueCount: number; wrongCount: number }>('/tests/review/stats').then(r => r.data),
 
   startSession: (data: {
     mode: TestMode;
@@ -12,6 +12,7 @@ export const testsApi = {
     topicIds?: string[];
     reviewMode?: boolean;
     questionsPerTopic?: number;
+    wrongAnswersMode?: boolean;
   }) => apiClient.post<TestSession>('/tests/sessions', data).then(r => r.data),
 
   getSession: (id: string) =>
