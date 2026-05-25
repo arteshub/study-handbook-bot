@@ -51,7 +51,7 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
         catch (JsonException)
         {
             // GPT truncated mid-item — keep only fully-formed items
-            items = ParsePartialJsonArray(raw);
+            items = ParsePartialJsonArray<AiQuestionItem>(raw);
         }
 
         return items.Select(i => (
@@ -87,9 +87,19 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
         var outputTokens = Math.Min(300 + count * 200, 16000);
         var options = new ChatCompletionOptions { MaxOutputTokenCount = outputTokens };
         var response = await client.CompleteChatAsync([new UserChatMessage(prompt)], options, ct);
-        var json = ExtractJsonArray(response.Value.Content[0].Text.Trim());
+        var raw = response.Value.Content[0].Text.Trim();
+        var json = ExtractJsonArray(raw);
 
-        var items = JsonSerializer.Deserialize<List<SelfQaItem>>(json, JsonOpts) ?? [];
+        List<SelfQaItem> items;
+        try
+        {
+            items = JsonSerializer.Deserialize<List<SelfQaItem>>(json, JsonOpts) ?? [];
+        }
+        catch (JsonException)
+        {
+            items = ParsePartialJsonArray<SelfQaItem>(raw);
+        }
+
         return items.Select(i => (i.question, i.modelAnswer)).ToList();
     }
 
@@ -136,10 +146,10 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
         return raw;
     }
 
-    // Recovers fully-formed items from a JSON array truncated mid-element
-    private static List<AiQuestionItem> ParsePartialJsonArray(string raw)
+    // Recovers fully-formed items from a JSON array truncated or corrupted mid-element
+    private static List<T> ParsePartialJsonArray<T>(string raw)
     {
-        var result = new List<AiQuestionItem>();
+        var result = new List<T>();
         var start = raw.IndexOf('[');
         if (start < 0) return result;
 
@@ -155,7 +165,7 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
                     var slice = raw[objStart..(i + 1)];
                     try
                     {
-                        var item = JsonSerializer.Deserialize<AiQuestionItem>(slice, JsonOpts);
+                        var item = JsonSerializer.Deserialize<T>(slice, JsonOpts);
                         if (item is not null) result.Add(item);
                     }
                     catch { /* skip malformed object */ }
