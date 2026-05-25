@@ -1,6 +1,8 @@
 using HandbookBot.Application.Common.Interfaces;
 using Microsoft.Extensions.Configuration;
+using OpenAI;
 using OpenAI.Chat;
+using System.ClientModel;
 using System.Text.Json;
 
 namespace HandbookBot.Infrastructure.Services;
@@ -13,10 +15,15 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
     private const int MaxContentCharsSelf = 12000;
     private const int MaxContentCharsAi = 6000;
 
+    // Default SDK network timeout is 100s which is too short for large question batches
+    private static readonly OpenAIClientOptions ClientOptions = new() { NetworkTimeout = TimeSpan.FromMinutes(5) };
+
+    private ChatClient CreateClient() => new("gpt-4o-mini", new ApiKeyCredential(ApiKey), ClientOptions);
+
     public async Task<IReadOnlyList<(string Question, IReadOnlyList<AiOption> Options)>> GenerateQuestionsAsync(
         string topicTitle, string topicContent, int count, CancellationToken ct = default)
     {
-        var client = new ChatClient("gpt-4o-mini", ApiKey);
+        var client = CreateClient();
 
         var content = topicContent.Length > MaxContentCharsAi
             ? topicContent[..MaxContentCharsAi] + "\n...[обрезано]"
@@ -56,7 +63,7 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
     public async Task<IReadOnlyList<(string Question, string ModelAnswer)>> GenerateSelfTestQuestionsAsync(
         string topicTitle, string topicContent, int count, CancellationToken ct = default)
     {
-        var client = new ChatClient("gpt-4o-mini", ApiKey);
+        var client = CreateClient();
 
         var content = topicContent.Length > MaxContentCharsSelf
             ? topicContent[..MaxContentCharsSelf] + "\n...[обрезано]"
@@ -90,7 +97,7 @@ internal sealed class OpenAiService(IConfiguration config) : IAiService
         string topicTitle, string topicContent, string questionContext, string modelAnswerContext,
         IReadOnlyList<(string Role, string Content)> history, string userMessage, CancellationToken ct = default)
     {
-        var client = new ChatClient("gpt-4o-mini", ApiKey);
+        var client = CreateClient();
 
         var content = topicContent.Length > 4000 ? topicContent[..4000] + "\n...[обрезано]" : topicContent;
 
