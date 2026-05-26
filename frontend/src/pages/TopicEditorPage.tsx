@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MDEditor from '@uiw/react-md-editor';
-import { ArrowLeft, Save, Youtube } from 'lucide-react';
+import { ArrowLeft, Save, CirclePlay } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { topicsApi } from '../api/topics';
@@ -93,7 +93,7 @@ export const TopicEditorPage = () => {
                 onClick={() => setYtOpen(true)}
                 className="flex items-center gap-1.5 text-xs font-medium text-red-500 active:opacity-70 transition-opacity"
               >
-                <Youtube size={14} />
+                <CirclePlay size={14} />
                 Из YouTube
               </button>
             </div>
