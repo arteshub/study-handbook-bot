@@ -22,7 +22,8 @@ public sealed record TestQuestionDto(
     string? CorrectAnswer,
     int QuestionNumber,
     int TotalQuestions,
-    IReadOnlyList<QuestionOptionDto>? Options);
+    IReadOnlyList<QuestionOptionDto>? Options,
+    Guid? CachedQuestionId = null);
 
 public sealed record AnswerOptionResultDto(int Index, string Text, bool IsCorrect, string Explanation);
 

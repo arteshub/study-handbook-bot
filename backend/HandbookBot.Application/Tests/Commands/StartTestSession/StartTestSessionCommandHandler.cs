@@ -32,7 +32,7 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
         {
             var topics = await CollectTopicsAsync(request, ct);
             if (topics.Count == 0) throw new InvalidOperationException("No topics found for the selected scope.");
-            results = await BuildNormalResultsAsync(session, topics, request.Mode, ct);
+            results = await BuildNormalResultsAsync(session, topics, request.Mode, request.UserId, ct);
         }
 
         session.SetTotalQuestions(results.Count);
@@ -61,7 +61,7 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             .ToList();
     }
 
-    private async Task<List<TestResult>> BuildNormalResultsAsync(TestSession session, IReadOnlyList<Topic> topics, TestMode mode, CancellationToken ct)
+    private async Task<List<TestResult>> BuildNormalResultsAsync(TestSession session, IReadOnlyList<Topic> topics, TestMode mode, long userId, CancellationToken ct)
     {
         using var aiCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var aiCt = aiCts.Token;
@@ -79,55 +79,64 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             if (mode == TestMode.AI)
             {
                 var cached = await uow.CachedQuestions.GetAsync(topic.Id, TestMode.AI, contentHash, ct);
-                IReadOnlyList<(string Question, IReadOnlyList<AiOption> Options)> qas;
+                var discardedIds = cached.Count > 0
+                    ? await uow.DiscardedQuestions.GetDiscardedIdsAsync(userId, cached.Select(q => q.Id).ToList(), ct)
+                    : (IReadOnlySet<Guid>)new HashSet<Guid>();
+                var available = cached.Where(q => !discardedIds.Contains(q.Id)).OrderBy(_ => Guid.NewGuid()).ToList();
 
-                if (cached.Count > 0)
-                {
-                    qas = cached
-                        .OrderBy(_ => Guid.NewGuid())
-                        .Take(count)
-                        .Select(q => ((string)q.QuestionText, (IReadOnlyList<AiOption>)DeserializeOptions(q.OptionsJson!)))
-                        .ToList();
-                }
-                else
-                {
-                    qas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, count, aiCt);
+                var goodEntries = available.Take(count).ToList();
+                var needNew = count - goodEntries.Count;
 
-                    var toCache = qas.Select(q =>
+                List<CachedQuestion> newEntries = [];
+                if (needNew > 0)
+                {
+                    var newQas = await aiService.GenerateQuestionsAsync(topic.Title, topic.Content, needNew, aiCt);
+                    newEntries = newQas.Select(q =>
                         CachedQuestion.CreateAi(topic.Id, contentHash, q.Question,
                             JsonSerializer.Serialize(q.Options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }))))
                         .ToList();
-                    _ = SaveCacheAsync(topic.Id, TestMode.AI, contentHash, toCache, aiCt);
+                    if (cached.Count == 0)
+                        _ = SaveCacheAsync(topic.Id, TestMode.AI, contentHash, newEntries, aiCt);
+                    else
+                        _ = AppendCacheAsync(newEntries, aiCt);
                 }
 
-                foreach (var (question, options) in qas)
+                foreach (var cq in goodEntries)
                 {
-                    var optionsJson = JsonSerializer.Serialize(options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }));
-                    results.Add(TestResult.Create(session.Id, topic.Id, question, string.Empty, order++, optionsJson));
+                    var optionsJson = JsonSerializer.Serialize(DeserializeOptions(cq.OptionsJson!).Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }));
+                    results.Add(TestResult.Create(session.Id, topic.Id, cq.QuestionText, string.Empty, order++, optionsJson, cq.Id));
+                }
+                foreach (var cq in newEntries)
+                {
+                    results.Add(TestResult.Create(session.Id, topic.Id, cq.QuestionText, string.Empty, order++, cq.OptionsJson));
                 }
             }
             else
             {
                 var cached = await uow.CachedQuestions.GetAsync(topic.Id, TestMode.Self, contentHash, ct);
-                IReadOnlyList<(string Question, string ModelAnswer)> qas;
+                var discardedIds = cached.Count > 0
+                    ? await uow.DiscardedQuestions.GetDiscardedIdsAsync(userId, cached.Select(q => q.Id).ToList(), ct)
+                    : (IReadOnlySet<Guid>)new HashSet<Guid>();
+                var available = cached.Where(q => !discardedIds.Contains(q.Id)).OrderBy(_ => Guid.NewGuid()).ToList();
 
-                if (cached.Count > 0)
+                var goodEntries = available.Take(count).ToList();
+                var needNew = count - goodEntries.Count;
+
+                List<CachedQuestion> newEntries = [];
+                if (needNew > 0)
                 {
-                    qas = cached
-                        .OrderBy(_ => Guid.NewGuid())
-                        .Take(count)
-                        .Select(q => (q.QuestionText, q.ModelAnswer ?? string.Empty))
-                        .ToList();
-                }
-                else
-                {
-                    qas = await aiService.GenerateSelfTestQuestionsAsync(topic.Title, topic.Content, count, aiCt);
-
-                    var toCache = qas.Select(q => CachedQuestion.CreateSelf(topic.Id, contentHash, q.Question, q.ModelAnswer)).ToList();
-                    _ = SaveCacheAsync(topic.Id, TestMode.Self, contentHash, toCache, aiCt);
+                    var newQas = await aiService.GenerateSelfTestQuestionsAsync(topic.Title, topic.Content, needNew, aiCt);
+                    newEntries = newQas.Select(q => CachedQuestion.CreateSelf(topic.Id, contentHash, q.Question, q.ModelAnswer)).ToList();
+                    if (cached.Count == 0)
+                        _ = SaveCacheAsync(topic.Id, TestMode.Self, contentHash, newEntries, aiCt);
+                    else
+                        _ = AppendCacheAsync(newEntries, aiCt);
                 }
 
-                results.AddRange(qas.Select(qa => TestResult.Create(session.Id, topic.Id, qa.Question, qa.ModelAnswer, order++)));
+                foreach (var cq in goodEntries)
+                    results.Add(TestResult.Create(session.Id, topic.Id, cq.QuestionText, cq.ModelAnswer ?? string.Empty, order++, null, cq.Id));
+                foreach (var cq in newEntries)
+                    results.Add(TestResult.Create(session.Id, topic.Id, cq.QuestionText, cq.ModelAnswer ?? string.Empty, order++));
             }
         }
 
@@ -136,6 +145,18 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
 
     // Saves generated questions to cache in a new DI scope,
     // independent of the HTTP request scope (which may be disposed on client timeout).
+    private async Task AppendCacheAsync(IReadOnlyList<CachedQuestion> questions, CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var cacheUow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            await cacheUow.CachedQuestions.AddRangeAsync(questions, ct);
+            await cacheUow.SaveChangesAsync(ct);
+        }
+        catch { }
+    }
+
     private async Task SaveCacheAsync(Guid topicId, TestMode mode, string contentHash, IReadOnlyList<CachedQuestion> questions, CancellationToken ct)
     {
         try

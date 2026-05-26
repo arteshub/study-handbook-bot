@@ -39,4 +39,7 @@ export const testsApi = {
 
   getHistory: () =>
     apiClient.get<TestSession[]>('/tests/history').then(r => r.data),
+
+  discardQuestion: (cachedQuestionId: string) =>
+    apiClient.post(`/tests/cached-questions/${cachedQuestionId}/discard`),
 };

@@ -108,6 +108,7 @@ export interface TestQuestion {
   questionNumber: number;
   totalQuestions: number;
   options?: QuestionOption[];
+  cachedQuestionId?: string;
 }
 
 export interface TestAnswerResult {

@@ -13,10 +13,11 @@ public sealed class TestResult : BaseEntity
     public bool? IsCorrect { get; private set; }
     public string? AiFeedback { get; private set; }
     public int Order { get; private set; }
+    public Guid? CachedQuestionId { get; private set; }
 
     private TestResult() { }
 
-    public static TestResult Create(Guid sessionId, Guid topicId, string question, string correctAnswer, int order, string? optionsJson = null)
+    public static TestResult Create(Guid sessionId, Guid topicId, string question, string correctAnswer, int order, string? optionsJson = null, Guid? cachedQuestionId = null)
     {
         return new TestResult
         {
@@ -25,7 +26,8 @@ public sealed class TestResult : BaseEntity
             Question = question,
             CorrectAnswer = correctAnswer,
             OptionsJson = optionsJson,
-            Order = order
+            Order = order,
+            CachedQuestionId = cachedQuestionId,
         };
     }
 

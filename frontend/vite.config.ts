@@ -7,6 +7,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': { target: 'http://localhost:5022', changeOrigin: true },
+      '/hubs': { target: 'http://localhost:5022', changeOrigin: true, ws: true },
     },
   },
   build: {

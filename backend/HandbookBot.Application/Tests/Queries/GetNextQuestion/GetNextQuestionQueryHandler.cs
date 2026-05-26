@@ -48,7 +48,8 @@ internal sealed class GetNextQuestionQueryHandler(IUnitOfWork uow)
             correctAnswer,
             answered + 1,
             session.TotalQuestions,
-            options);
+            options,
+            next.CachedQuestionId);
     }
 
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };

@@ -19,6 +19,7 @@ internal sealed class TestResultConfiguration : IEntityTypeConfiguration<TestRes
         builder.Property(r => r.IsCorrect).HasColumnName("is_correct");
         builder.Property(r => r.AiFeedback).HasColumnName("ai_feedback");
         builder.Property(r => r.Order).HasColumnName("order");
+        builder.Property(r => r.CachedQuestionId).HasColumnName("cached_question_id");
         builder.Property(r => r.CreatedAt).HasColumnName("created_at");
         builder.Property(r => r.UpdatedAt).HasColumnName("updated_at");
     }

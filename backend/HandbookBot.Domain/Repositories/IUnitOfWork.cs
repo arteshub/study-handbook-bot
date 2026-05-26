@@ -10,6 +10,8 @@ public interface IUnitOfWork
     ITestResultRepository TestResults { get; }
     ITopicProgressRepository TopicProgress { get; }
     ICachedQuestionRepository CachedQuestions { get; }
+    IDiscardedQuestionRepository DiscardedQuestions { get; }
+    IReadingPositionRepository ReadingPositions { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

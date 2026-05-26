@@ -10,6 +10,7 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
 import { useContentSearch } from '../hooks/useContentSearch';
+import { useScrollSync } from '../hooks/useScrollSync';
 
 type Panel = 'links' | 'children' | null;
 
@@ -26,6 +27,7 @@ export const TopicPage = () => {
   const contentRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { query, setQuery, matchCount, currentIndex, next, prev, clear } = useContentSearch(contentRef);
+  useScrollSync(id);
 
   const { data: topic, isLoading } = useQuery({
     queryKey: ['topics', id, 'detail'],

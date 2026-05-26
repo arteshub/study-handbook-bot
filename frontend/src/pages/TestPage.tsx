@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueries } from '@tanstack/react-query';
 import MDEditor from '@uiw/react-md-editor';
-import { BookOpen, SkipForward } from 'lucide-react';
+import { BookOpen, SkipForward, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { sectionsApi } from '../api/sections';
@@ -33,6 +33,8 @@ export const TestPage = () => {
   const [startError, setStartError] = useState('');
   const [skipping, setSkipping] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardedIds, setDiscardedIds] = useState<Set<string>>(new Set());
 
   const { data: reviewStats } = useQuery({
     queryKey: ['review-stats'],
@@ -176,6 +178,17 @@ export const TestPage = () => {
     }
   };
 
+  const discardQuestion = async () => {
+    if (!question?.cachedQuestionId || discarding) return;
+    setDiscarding(true);
+    try {
+      await testsApi.discardQuestion(question.cachedQuestionId);
+      setDiscardedIds(prev => new Set([...prev, question.cachedQuestionId!]));
+    } finally {
+      setDiscarding(false);
+    }
+  };
+
   const skipQuestion = async () => {
     if (!session || !question) return;
     setSkipping(true);
@@ -206,6 +219,7 @@ export const TestPage = () => {
     setSelectedSectionIds([]);
     setSelectedSubsectionIds([]);
     setSelectedTopicIds([]);
+    setDiscardedIds(new Set());
   };
 
   const scopeLabel = selectedTopicIds.length > 0
@@ -395,9 +409,25 @@ export const TestPage = () => {
         </button>
 
         {/* Question */}
-        <Card className="mb-4">
-          <p className="text-base font-semibold leading-snug">{question.question}</p>
-        </Card>
+        <div className="relative mb-4">
+          {question.cachedQuestionId && (
+            <button
+              onClick={discardQuestion}
+              disabled={discarding || discardedIds.has(question.cachedQuestionId)}
+              title="Пересоздать вопрос при следующем тесте"
+              className={`absolute -top-2 right-0 z-10 w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
+                discardedIds.has(question.cachedQuestionId)
+                  ? 'bg-red-100 text-red-400'
+                  : 'bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)] text-red-300 hover:bg-red-50 hover:text-red-400'
+              } disabled:opacity-40`}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+          <Card>
+            <p className="text-base font-semibold leading-snug">{question.question}</p>
+          </Card>
+        </div>
 
         {isMultiChoice ? (
           <div className="flex flex-col gap-2">

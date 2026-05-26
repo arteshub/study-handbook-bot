@@ -7,12 +7,14 @@ using HandbookBot.Application.Tests.Commands.SubmitAnswer;
 using HandbookBot.Application.Tests.Queries.GetNextQuestion;
 using HandbookBot.Application.Tests.Queries.GetTestHistory;
 using HandbookBot.Application.Tests.Queries.GetTestSession;
+using HandbookBot.Domain.Entities;
+using HandbookBot.Domain.Repositories;
 using HandbookBot.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HandbookBot.API.Controllers;
 
-public sealed class TestsController : BaseController
+public sealed class TestsController(IUnitOfWork uow) : BaseController
 {
     [HttpGet("review/stats")]
     public async Task<IActionResult> GetReviewStats(CancellationToken ct) =>
@@ -67,6 +69,18 @@ public sealed class TestsController : BaseController
     [HttpGet("history")]
     public async Task<IActionResult> GetHistory(CancellationToken ct) =>
         Ok(await Mediator.Send(new GetTestHistoryQuery(CurrentUserId), ct));
+
+    [HttpPost("cached-questions/{cachedQuestionId:guid}/discard")]
+    public async Task<IActionResult> DiscardQuestion(Guid cachedQuestionId, CancellationToken ct)
+    {
+        var exists = await uow.DiscardedQuestions.ExistsAsync(CurrentUserId, cachedQuestionId, ct);
+        if (!exists)
+        {
+            await uow.DiscardedQuestions.AddAsync(DiscardedQuestion.Create(CurrentUserId, cachedQuestionId), ct);
+            await uow.SaveChangesAsync(ct);
+        }
+        return NoContent();
+    }
 }
 
 public sealed record StartTestRequest(

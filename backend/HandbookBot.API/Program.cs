@@ -1,3 +1,4 @@
+using HandbookBot.API.Hubs;
 using HandbookBot.API.Middleware;
 using HandbookBot.Application;
 using HandbookBot.Infrastructure;
@@ -14,9 +15,14 @@ builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddSignalR();
 
 builder.Services.AddCors(opt =>
-    opt.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+    opt.AddDefaultPolicy(p => p
+        .SetIsOriginAllowed(_ => true)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials()));
 
 var app = builder.Build();
 
@@ -38,6 +44,7 @@ if (app.Environment.IsDevelopment())
 app.UseCors();
 app.UseStaticFiles();
 app.MapControllers();
+app.MapHub<ReadingHub>("/hubs/reading");
 app.MapFallbackToFile("index.html");
 
 if (app.Environment.IsProduction())

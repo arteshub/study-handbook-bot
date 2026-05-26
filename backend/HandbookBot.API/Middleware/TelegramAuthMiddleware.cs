@@ -7,7 +7,8 @@ internal sealed class TelegramAuthMiddleware(RequestDelegate next, IServiceScope
 {
     public async Task InvokeAsync(HttpContext ctx)
     {
-        var header = ctx.Request.Headers["X-Telegram-User-Id"].FirstOrDefault();
+        var header = ctx.Request.Headers["X-Telegram-User-Id"].FirstOrDefault()
+            ?? ctx.Request.Query["userId"].FirstOrDefault();
 
         if (!string.IsNullOrEmpty(header) && long.TryParse(header, out var telegramId))
         {
