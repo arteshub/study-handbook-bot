@@ -409,25 +409,25 @@ export const TestPage = () => {
         </button>
 
         {/* Question */}
-        <div className="relative mb-4">
+        <Card className="mb-4">
           {question.cachedQuestionId && (
-            <button
-              onClick={discardQuestion}
-              disabled={discarding || discardedIds.has(question.cachedQuestionId)}
-              title="Пересоздать вопрос при следующем тесте"
-              className={`absolute -top-2 right-0 z-10 w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${
-                discardedIds.has(question.cachedQuestionId)
-                  ? 'bg-red-100 text-red-400'
-                  : 'bg-[var(--tg-theme-secondary-bg-color,#f1f1f1)] text-red-300 hover:bg-red-50 hover:text-red-400'
-              } disabled:opacity-40`}
-            >
-              <Trash2 size={13} />
-            </button>
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={discardQuestion}
+                disabled={discarding || discardedIds.has(question.cachedQuestionId)}
+                title="Пересоздать вопрос при следующем тесте"
+                className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${
+                  discardedIds.has(question.cachedQuestionId)
+                    ? 'bg-red-100 text-red-400'
+                    : 'text-red-300 hover:bg-red-50 hover:text-red-400'
+                } disabled:opacity-40`}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
           )}
-          <Card>
-            <p className="text-base font-semibold leading-snug">{question.question}</p>
-          </Card>
-        </div>
+          <p className="text-base font-semibold leading-snug">{question.question}</p>
+        </Card>
 
         {isMultiChoice ? (
           <div className="flex flex-col gap-2">

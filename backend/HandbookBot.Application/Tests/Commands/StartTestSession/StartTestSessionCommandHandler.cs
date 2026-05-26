@@ -102,14 +102,9 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
                 }
 
                 foreach (var cq in goodEntries)
-                {
-                    var optionsJson = JsonSerializer.Serialize(DeserializeOptions(cq.OptionsJson!).Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation }));
-                    results.Add(TestResult.Create(session.Id, topic.Id, cq.QuestionText, string.Empty, order++, optionsJson, cq.Id));
-                }
+                    results.Add(TestResult.Create(session.Id, topic.Id, cq.QuestionText, string.Empty, order++, cq.OptionsJson, cq.Id));
                 foreach (var cq in newEntries)
-                {
                     results.Add(TestResult.Create(session.Id, topic.Id, cq.QuestionText, string.Empty, order++, cq.OptionsJson));
-                }
             }
             else
             {
