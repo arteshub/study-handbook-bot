@@ -1,126 +1,73 @@
 using System.ClientModel;
-using System.Net.Http.Json;
 using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using HandbookBot.Application.Interfaces;
 using Microsoft.Extensions.Configuration;
 using OpenAI;
 using OpenAI.Chat;
+using YoutubeExplode;
+using YoutubeExplode.Exceptions;
 
 namespace HandbookBot.Infrastructure.Services;
 
-public class YoutubeExtractionService(IConfiguration config) : IYoutubeExtractionService
+public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguration config) : IYoutubeExtractionService
 {
     private string ApiKey => config["OpenAI:ApiKey"] ?? throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
 
     private const int ChunkMinutes = 10;
 
-    // Android client — YouTube cannot block it without breaking their own app
-    private static readonly HttpClient Http = new()
-    {
-        DefaultRequestHeaders =
-        {
-            { "User-Agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip" },
-            { "X-Youtube-Client-Name", "3" },
-            { "X-Youtube-Client-Version", "19.09.37" },
-        }
-    };
-
     public async Task<YoutubeExtractResult> ExtractAndGenerateAsync(string url, CancellationToken ct = default)
     {
-        var videoId = ExtractVideoId(url)
-            ?? throw new InvalidOperationException("Не удалось извлечь ID видео из ссылки.");
-
-        var (title, subtitles) = await FetchSubtitlesAsync(videoId, ct);
-
-        var lines = subtitles.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
-        var chunks = SplitIntoChunks(lines, ChunkMinutes);
-
-        var client = CreateChatClient();
-        var parts = new List<string>();
-        for (int i = 0; i < chunks.Count; i++)
-            parts.Add(await GenerateChunkAsync(client, title, chunks[i], i + 1, chunks.Count, ct));
-
-        return new YoutubeExtractResult(title, string.Join("\n\n", parts));
+        try
+        {
+            return await ExtractInternalAsync(url, ct);
+        }
+        catch (VideoUnavailableException ex)
+        {
+            throw new InvalidOperationException($"Видео недоступно с сервера: {ex.Message}", ex);
+        }
+        catch (YoutubeExplodeException ex)
+        {
+            throw new InvalidOperationException($"Ошибка YouTube: {ex.Message}", ex);
+        }
     }
 
-    private static async Task<(string Title, string Subtitles)> FetchSubtitlesAsync(string videoId, CancellationToken ct)
+    private async Task<YoutubeExtractResult> ExtractInternalAsync(string url, CancellationToken ct)
     {
-        var body = new
+        string videoTitle;
+        try
         {
-            context = new
-            {
-                client = new
-                {
-                    clientName = "ANDROID",
-                    clientVersion = "19.09.37",
-                    androidSdkVersion = 30,
-                    hl = "ru",
-                    gl = "US"
-                }
-            },
-            videoId,
-            contentCheckOk = true,
-            racyCheckOk = true
-        };
-
-        var response = await Http.PostAsJsonAsync(
-            "https://www.youtube.com/youtubei/v1/player", body, ct);
-
-        response.EnsureSuccessStatusCode();
-
-        var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
-
-        // video title
-        var title = videoId;
-        if (json.TryGetProperty("videoDetails", out var details) &&
-            details.TryGetProperty("title", out var t))
-            title = t.GetString() ?? videoId;
-
-        // find caption tracks
-        if (!json.TryGetProperty("captions", out var captions) ||
-            !captions.TryGetProperty("playerCaptionsTracklistRenderer", out var renderer) ||
-            !renderer.TryGetProperty("captionTracks", out var tracks))
-            throw new InvalidOperationException("Видео не содержит субтитров.");
-
-        var trackList = tracks.EnumerateArray().ToList();
-        if (trackList.Count == 0)
-            throw new InvalidOperationException("Видео не содержит субтитров.");
-
-        // prefer Russian, fall back to first
-        var track = trackList.FirstOrDefault(t =>
-            t.TryGetProperty("languageCode", out var lc) &&
-            lc.GetString()?.StartsWith("ru", StringComparison.OrdinalIgnoreCase) == true);
-        if (track.ValueKind == JsonValueKind.Undefined)
-            track = trackList[0];
-
-        var baseUrl = track.GetProperty("baseUrl").GetString()!;
-        var captionsJson = await Http.GetFromJsonAsync<JsonElement>(baseUrl + "&fmt=json3", ct);
-
-        var sb = new StringBuilder();
-        foreach (var evt in captionsJson.GetProperty("events").EnumerateArray())
+            var video = await youtubeClient.Videos.GetAsync(url, ct);
+            videoTitle = video.Title;
+        }
+        catch (YoutubeExplodeException)
         {
-            if (!evt.TryGetProperty("segs", out var segs)) continue;
-            var text = string.Concat(segs.EnumerateArray()
-                .Select(s => s.TryGetProperty("utf8", out var u) ? u.GetString() ?? "" : ""))
-                .Trim();
-            if (string.IsNullOrWhiteSpace(text) || text == "\n") continue;
-
-            var tMs = evt.GetProperty("tStartMs").GetInt64();
-            sb.AppendLine($"[{tMs / 60000:D2}:{tMs % 60000 / 1000:D2}] {text}");
+            var match = System.Text.RegularExpressions.Regex.Match(url, @"[?&]v=([^&]+)");
+            videoTitle = match.Success ? $"YouTube video ({match.Groups[1].Value})" : "YouTube video";
         }
 
-        return (title, sb.ToString());
-    }
+        var manifest = await youtubeClient.Videos.ClosedCaptions.GetManifestAsync(url, ct);
+        var trackInfo = manifest.Tracks
+            .FirstOrDefault(t => t.Language.Code.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
+            ?? manifest.Tracks.FirstOrDefault()
+            ?? throw new InvalidOperationException("Видео не содержит субтитров.");
 
-    private static string? ExtractVideoId(string url)
-    {
-        var m = Regex.Match(url, @"[?&]v=([^&]+)");
-        if (m.Success) return m.Groups[1].Value;
-        m = Regex.Match(url, @"youtu\.be/([^?&]+)");
-        if (m.Success) return m.Groups[1].Value;
-        return null;
+        var track = await youtubeClient.Videos.ClosedCaptions.GetAsync(trackInfo, ct);
+
+        var lines = new List<string>();
+        foreach (var caption in track.Captions)
+        {
+            var offset = caption.Offset;
+            lines.Add($"[{(int)offset.TotalMinutes:D2}:{offset.Seconds:D2}] {caption.Text}");
+        }
+
+        var chunks = SplitIntoChunks(lines, ChunkMinutes);
+        var client = CreateChatClient();
+
+        var parts = new List<string>();
+        for (int i = 0; i < chunks.Count; i++)
+            parts.Add(await GenerateChunkAsync(client, videoTitle, chunks[i], i + 1, chunks.Count, ct));
+
+        return new YoutubeExtractResult(videoTitle, string.Join("\n\n", parts));
     }
 
     private static List<string> SplitIntoChunks(List<string> lines, int chunkMinutes)
