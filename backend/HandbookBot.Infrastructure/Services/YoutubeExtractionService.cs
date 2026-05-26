@@ -1,78 +1,126 @@
 using System.ClientModel;
+using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using HandbookBot.Application.Interfaces;
 using Microsoft.Extensions.Configuration;
 using OpenAI;
 using OpenAI.Chat;
-using YoutubeExplode;
-using YoutubeExplode.Exceptions;
 
 namespace HandbookBot.Infrastructure.Services;
 
-public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguration config) : IYoutubeExtractionService
+public class YoutubeExtractionService(IConfiguration config) : IYoutubeExtractionService
 {
     private string ApiKey => config["OpenAI:ApiKey"] ?? throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
 
     private const int ChunkMinutes = 10;
 
+    // Android client — YouTube cannot block it without breaking their own app
+    private static readonly HttpClient Http = new()
+    {
+        DefaultRequestHeaders =
+        {
+            { "User-Agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip" },
+            { "X-Youtube-Client-Name", "3" },
+            { "X-Youtube-Client-Version", "19.09.37" },
+        }
+    };
+
     public async Task<YoutubeExtractResult> ExtractAndGenerateAsync(string url, CancellationToken ct = default)
     {
-        try
-        {
-            return await ExtractInternalAsync(url, ct);
-        }
-        catch (VideoUnavailableException ex)
-        {
-            throw new InvalidOperationException($"Видео недоступно с сервера: {ex.Message}", ex);
-        }
-        catch (YoutubeExplodeException ex)
-        {
-            throw new InvalidOperationException($"Ошибка YouTube: {ex.Message}", ex);
-        }
-    }
+        var videoId = ExtractVideoId(url)
+            ?? throw new InvalidOperationException("Не удалось извлечь ID видео из ссылки.");
 
-    private async Task<YoutubeExtractResult> ExtractInternalAsync(string url, CancellationToken ct)
-    {
-        string videoTitle;
-        try
-        {
-            var video = await youtubeClient.Videos.GetAsync(url, ct);
-            videoTitle = video.Title;
-        }
-        catch (YoutubeExplodeException)
-        {
-            // Watch page may be blocked from datacenter IPs; use URL as fallback title
-            var match = System.Text.RegularExpressions.Regex.Match(url, @"[?&]v=([^&]+)");
-            videoTitle = match.Success ? $"YouTube video ({match.Groups[1].Value})" : "YouTube video";
-        }
+        var (title, subtitles) = await FetchSubtitlesAsync(videoId, ct);
 
-        var manifest = await youtubeClient.Videos.ClosedCaptions.GetManifestAsync(url, ct);
-        var trackInfo = manifest.Tracks
-            .FirstOrDefault(t => t.Language.Code.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
-            ?? manifest.Tracks.FirstOrDefault()
-            ?? throw new InvalidOperationException("Видео не содержит субтитров.");
-
-        var track = await youtubeClient.Videos.ClosedCaptions.GetAsync(trackInfo, ct);
-
-        var lines = new List<string>();
-        foreach (var caption in track.Captions)
-        {
-            var offset = caption.Offset;
-            lines.Add($"[{(int)offset.TotalMinutes:D2}:{offset.Seconds:D2}] {caption.Text}");
-        }
-
+        var lines = subtitles.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
         var chunks = SplitIntoChunks(lines, ChunkMinutes);
-        var client = CreateClient();
 
+        var client = CreateChatClient();
         var parts = new List<string>();
         for (int i = 0; i < chunks.Count; i++)
+            parts.Add(await GenerateChunkAsync(client, title, chunks[i], i + 1, chunks.Count, ct));
+
+        return new YoutubeExtractResult(title, string.Join("\n\n", parts));
+    }
+
+    private static async Task<(string Title, string Subtitles)> FetchSubtitlesAsync(string videoId, CancellationToken ct)
+    {
+        var body = new
         {
-            var part = await GenerateChunkAsync(client, videoTitle, chunks[i], i + 1, chunks.Count, ct);
-            parts.Add(part);
+            context = new
+            {
+                client = new
+                {
+                    clientName = "ANDROID",
+                    clientVersion = "19.09.37",
+                    androidSdkVersion = 30,
+                    hl = "ru",
+                    gl = "US"
+                }
+            },
+            videoId,
+            contentCheckOk = true,
+            racyCheckOk = true
+        };
+
+        var response = await Http.PostAsJsonAsync(
+            "https://www.youtube.com/youtubei/v1/player", body, ct);
+
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+
+        // video title
+        var title = videoId;
+        if (json.TryGetProperty("videoDetails", out var details) &&
+            details.TryGetProperty("title", out var t))
+            title = t.GetString() ?? videoId;
+
+        // find caption tracks
+        if (!json.TryGetProperty("captions", out var captions) ||
+            !captions.TryGetProperty("playerCaptionsTracklistRenderer", out var renderer) ||
+            !renderer.TryGetProperty("captionTracks", out var tracks))
+            throw new InvalidOperationException("Видео не содержит субтитров.");
+
+        var trackList = tracks.EnumerateArray().ToList();
+        if (trackList.Count == 0)
+            throw new InvalidOperationException("Видео не содержит субтитров.");
+
+        // prefer Russian, fall back to first
+        var track = trackList.FirstOrDefault(t =>
+            t.TryGetProperty("languageCode", out var lc) &&
+            lc.GetString()?.StartsWith("ru", StringComparison.OrdinalIgnoreCase) == true);
+        if (track.ValueKind == JsonValueKind.Undefined)
+            track = trackList[0];
+
+        var baseUrl = track.GetProperty("baseUrl").GetString()!;
+        var captionsJson = await Http.GetFromJsonAsync<JsonElement>(baseUrl + "&fmt=json3", ct);
+
+        var sb = new StringBuilder();
+        foreach (var evt in captionsJson.GetProperty("events").EnumerateArray())
+        {
+            if (!evt.TryGetProperty("segs", out var segs)) continue;
+            var text = string.Concat(segs.EnumerateArray()
+                .Select(s => s.TryGetProperty("utf8", out var u) ? u.GetString() ?? "" : ""))
+                .Trim();
+            if (string.IsNullOrWhiteSpace(text) || text == "\n") continue;
+
+            var tMs = evt.GetProperty("tStartMs").GetInt64();
+            sb.AppendLine($"[{tMs / 60000:D2}:{tMs % 60000 / 1000:D2}] {text}");
         }
 
-        var content = string.Join("\n\n", parts);
-        return new YoutubeExtractResult(videoTitle, content);
+        return (title, sb.ToString());
+    }
+
+    private static string? ExtractVideoId(string url)
+    {
+        var m = Regex.Match(url, @"[?&]v=([^&]+)");
+        if (m.Success) return m.Groups[1].Value;
+        m = Regex.Match(url, @"youtu\.be/([^?&]+)");
+        if (m.Success) return m.Groups[1].Value;
+        return null;
     }
 
     private static List<string> SplitIntoChunks(List<string> lines, int chunkMinutes)
@@ -83,20 +131,18 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
 
         foreach (var line in lines)
         {
-            // parse [MM:SS] at start of each line
             if (line.Length >= 7 && line[0] == '[')
             {
                 var colon = line.IndexOf(':');
                 var close = line.IndexOf(']');
                 if (colon > 0 && close > colon &&
-                    int.TryParse(line[1..colon], out int mins))
+                    int.TryParse(line[1..colon], out int mins) &&
+                    mins >= chunkStart + chunkMinutes &&
+                    current.Length > 0)
                 {
-                    if (mins >= chunkStart + chunkMinutes && current.Length > 0)
-                    {
-                        chunks.Add(current.ToString().TrimEnd());
-                        current.Clear();
-                        chunkStart = mins;
-                    }
+                    chunks.Add(current.ToString().TrimEnd());
+                    current.Clear();
+                    chunkStart = mins;
                 }
             }
             current.AppendLine(line);
@@ -119,7 +165,7 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
             "У каждого элемента есть:\n\n" +
             "- адрес — место в памяти\n" +
             "- размер — сколько байт занимает\n\n" +
-            "Индексация начинается с нуля. Слева и справа от массива в памяти — чужие данные, не принадлежащие массиву.\n\n" +
+            "Индексация начинается с нуля. Слева и справа от массива в памяти — чужие данные.\n\n" +
             "### 2. Создание массива [01:46 – 02:49]\n\n" +
             "```go\n" +
             "// 1) Просто объявление - zero value у int это 0\n" +
@@ -129,27 +175,32 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
             "```\n\n" +
             "Ключевой принцип: массив всегда инициализируется zero value. У int это 0.";
 
-        var isLast = partIndex == totalParts;
-        var cheatsheetInstruction = isLast
-            ? "After the last section, add a final ## ШПАРГАЛКА ДЛЯ СОБЕСА block with structured tables and quick-reference rules summarising the key points from the ENTIRE talk (not just this segment).\n\n"
-            : "Do NOT generate a шпаргалка — it will be added after all parts are processed.\n\n";
+        var cheatsheetInstruction = partIndex == totalParts
+            ? "After the last section, add ## ШПАРГАЛКА ДЛЯ СОБЕСА with structured tables and quick-reference rules covering the ENTIRE talk.\n\n"
+            : "Do NOT add a шпаргалка — it will be added in the final segment.\n\n";
 
         var prompt =
             $"You are given subtitles for segment {partIndex} of {totalParts} of the technical talk \"{videoTitle}\".\n\n" +
-            $"YOUR TASK: reproduce this segment as a structured article — NOT a summary. Reproduce every explanation the speaker gives in full detail. If the speaker uses 5 sentences, write 5 sentences.\n\n" +
-            $"AUTHOR'S STYLE — match it exactly. Example:\n\n---\n{styleExample}\n---\n\n" +
-            $"STYLE RULES:\n" +
-            $"- Conversational but precise — write exactly as a good lecturer speaks\n" +
-            $"- Every concept: what it is, why it works this way, what happens under the hood\n" +
-            $"- Include all comparisons with other languages, all analogies, all emphasis (\"Many people mistakenly think...\", \"This is important\")\n" +
-            $"- Every nuance the speaker explains must appear in the output\n\n" +
-            $"SKIP ONLY: ads, sponsor segments, subscribe/like calls-to-action, pure filler.\n\n" +
-            $"MUST INCLUDE EVERYTHING ELSE:\n" +
-            $"- Every technical explanation in full\n" +
-            $"- All code in fenced blocks with language tag and Russian inline comments; complete any truncated code to working state\n" +
+            $"YOUR TASK: produce a verbatim structured transcript of this segment — not a summary, not a rewrite. Reproduce every explanation the speaker gives in full detail. If the speaker spends 5 sentences on something, write 5 sentences, not one.\n\n" +
+            $"AUTHOR'S STYLE — match it exactly. Here is a concrete example of the required output style:\n\n" +
+            $"---\n{styleExample}\n---\n\n" +
+            $"STYLE RULES (derived from the example above):\n" +
+            $"- Conversational but precise technical language — write exactly as a good lecturer speaks\n" +
+            $"- Every concept gets: what it is, why it works this way, what happens under the hood\n" +
+            $"- Comparisons with other languages when the speaker mentions them — include them fully\n" +
+            $"- \"Many people mistakenly think...\", \"This is important\", \"Note that...\" — keep all such emphasis\n" +
+            $"- Explain every nuance the speaker explains; if they say something twice for emphasis, reflect that emphasis\n\n" +
+            $"SKIP ONLY:\n" +
+            $"- Ads and sponsor segments\n" +
+            $"- Subscribe / like / follow calls-to-action\n" +
+            $"- Pure filler with zero informational content\n\n" +
+            $"MUST INCLUDE:\n" +
+            $"- Every technical explanation in full — if the speaker uses 5 sentences, write 5 sentences, not one\n" +
+            $"- All code examples in fenced blocks with language tag and Russian inline comments; complete any truncated code to working state\n" +
+            $"- All analogies, all \"why\", all \"under the hood\" explanations\n" +
             $"- All tips, anti-patterns, gotchas, edge cases, numbers, formulas\n\n" +
             $"FORMAT:\n" +
-            $"- Number sections continuing from where segment {partIndex - 1} left off (start section numbering fresh only if this is segment 1)\n" +
+            $"- Number sections continuing from where segment {partIndex - 1} left off (start from 1 only if this is segment 1)\n" +
             $"- Sections: ### N. Название [HH:MM – HH:MM]\n" +
             $"- Use ## ЧАСТЬ headers for major thematic shifts\n" +
             $"{cheatsheetInstruction}" +
@@ -164,7 +215,7 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
         return response.Value.Content[0].Text;
     }
 
-    private ChatClient CreateClient() => new(
+    private ChatClient CreateChatClient() => new(
         "gpt-4o-mini",
         new ApiKeyCredential(ApiKey),
         new OpenAIClientOptions { NetworkTimeout = TimeSpan.FromMinutes(15) });
