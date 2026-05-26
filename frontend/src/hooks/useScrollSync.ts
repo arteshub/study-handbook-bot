@@ -67,7 +67,7 @@ export const useScrollSync = (topicId: string | undefined, isContentReady: boole
     setSavedRatio(null);
 
     readingPositionsApi.get(topicId)
-      .then(({ scrollRatio }) => { remoteLog(`fetched ratio=${scrollRatio}`); setSavedRatio(scrollRatio); })
+      .then((data) => { remoteLog(`raw=${JSON.stringify(data)}`); setSavedRatio(data.scrollRatio); })
       .catch((e) => { remoteLog(`fetch failed: ${String(e)}`); setSavedRatio(0); });
   }, [topicId]);
 
