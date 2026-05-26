@@ -8,13 +8,29 @@ const resolveUserId = (): string => {
   return tgId ? String(tgId) : '12345';
 };
 
-export const useScrollSync = (topicId: string | undefined) => {
+// Ждёт пока страница станет достаточно высокой, потом скроллит
+function restoreScroll(ratio: number, attempts = 0) {
+  if (ratio < 0.01) return;
+  const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+  if (maxScroll > 50) {
+    window.scrollTo({ top: ratio * maxScroll, behavior: 'instant' });
+  } else if (attempts < 20) {
+    setTimeout(() => restoreScroll(ratio, attempts + 1), 100);
+  }
+}
+
+export const useScrollSync = (topicId: string | undefined, isContentReady: boolean) => {
   const connectionRef = useRef<ReturnType<typeof buildConnection> | null>(null);
+  const savedRatioRef = useRef<number | null>(null);
   const restoredRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Подключение и получение сохранённой позиции
   useEffect(() => {
     if (!topicId) return;
+
+    restoredRef.current = false;
+    savedRatioRef.current = null;
 
     const userId = resolveUserId();
     const connection = buildConnection(userId);
@@ -22,23 +38,14 @@ export const useScrollSync = (topicId: string | undefined) => {
 
     let stopped = false;
 
-    connection.start().then(async () => {
-      if (stopped) return;
-      // Restore scroll position after data loads
-      if (!restoredRef.current) {
-        restoredRef.current = true;
-        try {
-          const { scrollRatio } = await readingPositionsApi.get(topicId);
-          if (scrollRatio > 0.01) {
-            // Wait for content to render
-            requestAnimationFrame(() => {
-              const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-              window.scrollTo({ top: scrollRatio * maxScroll, behavior: 'instant' });
-            });
-          }
-        } catch { /* ignore */ }
-      }
-    }).catch(() => { /* connection failed, ignore */ });
+    connection.start().catch(() => { });
+
+    // Получаем позицию независимо от состояния соединения
+    readingPositionsApi.get(topicId)
+      .then(({ scrollRatio }) => {
+        if (!stopped) savedRatioRef.current = scrollRatio;
+      })
+      .catch(() => { });
 
     const onScroll = () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -61,6 +68,23 @@ export const useScrollSync = (topicId: string | undefined) => {
       connection.stop();
     };
   }, [topicId]);
+
+  // Восстанавливаем скролл только когда контент реально отрисован
+  useEffect(() => {
+    if (!isContentReady || restoredRef.current) return;
+    restoredRef.current = true;
+
+    const ratio = savedRatioRef.current;
+    if (ratio !== null) {
+      restoreScroll(ratio);
+    } else {
+      // Позиция ещё не пришла — ждём немного
+      const timer = setTimeout(() => {
+        if (savedRatioRef.current !== null) restoreScroll(savedRatioRef.current);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isContentReady]);
 };
 
 function buildConnection(userId: string) {
