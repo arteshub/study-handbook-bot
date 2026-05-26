@@ -18,7 +18,17 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
 
-builder.Services.AddSingleton<YoutubeClient, YoutubeClient>();
+builder.Services.AddSingleton<YoutubeClient>(_ =>
+{
+    var http = new HttpClient();
+    http.DefaultRequestHeaders.Add("User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+    http.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
+    // Bypass GDPR consent page (required in EU/Russia server deployments)
+    http.DefaultRequestHeaders.Add("Cookie",
+        "SOCS=CAESEwgDEgk0OTMzMjMwMjIaAmVuIAEaBgiA_LyaBg; CONSENT=YES+cb");
+    return new YoutubeClient(http);
+});
 
 builder.Services.AddCors(opt =>
     opt.AddDefaultPolicy(p => p
