@@ -81,6 +81,14 @@ public sealed class TestsController(IUnitOfWork uow) : BaseController
         }
         return NoContent();
     }
+
+    [HttpDelete("cached-questions/{cachedQuestionId:guid}/discard")]
+    public async Task<IActionResult> UndiscardQuestion(Guid cachedQuestionId, CancellationToken ct)
+    {
+        await uow.DiscardedQuestions.DeleteAsync(CurrentUserId, cachedQuestionId, ct);
+        await uow.SaveChangesAsync(ct);
+        return NoContent();
+    }
 }
 
 public sealed record StartTestRequest(

@@ -42,4 +42,7 @@ export const testsApi = {
 
   discardQuestion: (cachedQuestionId: string) =>
     apiClient.post(`/tests/cached-questions/${cachedQuestionId}/discard`),
+
+  undiscardQuestion: (cachedQuestionId: string) =>
+    apiClient.delete(`/tests/cached-questions/${cachedQuestionId}/discard`),
 };

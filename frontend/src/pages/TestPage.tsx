@@ -178,12 +178,18 @@ export const TestPage = () => {
     }
   };
 
-  const discardQuestion = async () => {
+  const toggleDiscard = async () => {
     if (!question?.cachedQuestionId || discarding) return;
     setDiscarding(true);
+    const id = question.cachedQuestionId;
     try {
-      await testsApi.discardQuestion(question.cachedQuestionId);
-      setDiscardedIds(prev => new Set([...prev, question.cachedQuestionId!]));
+      if (discardedIds.has(id)) {
+        await testsApi.undiscardQuestion(id);
+        setDiscardedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+      } else {
+        await testsApi.discardQuestion(id);
+        setDiscardedIds(prev => new Set([...prev, id]));
+      }
     } finally {
       setDiscarding(false);
     }
@@ -402,16 +408,16 @@ export const TestPage = () => {
           {question.cachedQuestionId && (
             <div className="flex justify-end mb-2">
               <button
-                onClick={discardQuestion}
-                disabled={discarding || discardedIds.has(question.cachedQuestionId)}
-                title="Пересоздать вопрос при следующем тесте"
-                className={`w-6 h-6 flex items-center justify-center rounded-md transition-colors ${
+                onClick={toggleDiscard}
+                disabled={discarding}
+                title={discardedIds.has(question.cachedQuestionId) ? 'Снять пометку' : 'Пересоздать вопрос при следующем тесте'}
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
                   discardedIds.has(question.cachedQuestionId)
-                    ? 'bg-red-100 text-red-400'
+                    ? 'bg-red-100 text-red-500'
                     : 'text-red-300 hover:bg-red-50 hover:text-red-400'
                 } disabled:opacity-40`}
               >
-                <Trash2 size={12} />
+                <Trash2 size={16} />
               </button>
             </div>
           )}

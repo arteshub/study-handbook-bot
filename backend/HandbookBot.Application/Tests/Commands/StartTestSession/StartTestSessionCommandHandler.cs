@@ -46,18 +46,18 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
     {
         var topicIds = await uow.TestResults.GetTopicsWithWrongAnswersAsync(userId, ct);
 
-        var pool = new List<(Guid TopicId, string Question, string ModelAnswer)>();
+        var pool = new List<(Guid TopicId, Guid CachedId, string Question, string ModelAnswer)>();
         foreach (var topicId in topicIds)
         {
             var cached = await uow.CachedQuestions.GetAllByTopicAsync(topicId, TestMode.Self, ct);
             foreach (var q in cached)
-                pool.Add((topicId, q.QuestionText, q.ModelAnswer ?? string.Empty));
+                pool.Add((topicId, q.Id, q.QuestionText, q.ModelAnswer ?? string.Empty));
         }
 
         int order = 0;
         return pool
             .OrderBy(_ => Guid.NewGuid())
-            .Select(x => TestResult.Create(session.Id, x.TopicId, x.Question, x.ModelAnswer, order++))
+            .Select(x => TestResult.Create(session.Id, x.TopicId, x.Question, x.ModelAnswer, order++, null, x.CachedId))
             .ToList();
     }
 

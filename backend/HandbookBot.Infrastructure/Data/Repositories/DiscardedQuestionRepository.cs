@@ -21,4 +21,11 @@ internal sealed class DiscardedQuestionRepository(AppDbContext db) : IDiscardedQ
 
     public async Task AddAsync(DiscardedQuestion discard, CancellationToken ct = default) =>
         await db.DiscardedQuestions.AddAsync(discard, ct);
+
+    public async Task DeleteAsync(long userId, Guid cachedQuestionId, CancellationToken ct = default)
+    {
+        var row = await db.DiscardedQuestions
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.CachedQuestionId == cachedQuestionId, ct);
+        if (row is not null) db.DiscardedQuestions.Remove(row);
+    }
 }
