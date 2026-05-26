@@ -27,12 +27,13 @@ export const TopicPage = () => {
   const contentRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { query, setQuery, matchCount, currentIndex, next, prev, clear } = useContentSearch(contentRef);
-  useScrollSync(id, !isLoading && !!topic);
 
   const { data: topic, isLoading } = useQuery({
     queryKey: ['topics', id, 'detail'],
     queryFn: () => topicsApi.getById(id!),
   });
+
+  useScrollSync(id, !isLoading && !!topic);
 
   const { data: children } = useQuery({
     queryKey: ['topics', id, 'children'],
