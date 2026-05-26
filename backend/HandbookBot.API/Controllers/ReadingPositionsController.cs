@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HandbookBot.API.Controllers;
 
+[Route("api/reading-positions")]
 public sealed class ReadingPositionsController(IUnitOfWork uow) : BaseController
 {
     [HttpGet("{topicId:guid}")]
