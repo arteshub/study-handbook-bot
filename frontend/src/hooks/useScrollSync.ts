@@ -2,6 +2,11 @@ import { HubConnectionBuilder, HubConnectionState } from '@microsoft/signalr';
 import { useEffect, useRef, useState } from 'react';
 import { WebApp } from '../lib/telegram';
 import { readingPositionsApi } from '../api/readingPositions';
+import { apiClient } from '../api/client';
+
+const remoteLog = (msg: string) => {
+  apiClient.post('/debug/log', { msg }).catch(() => { });
+};
 
 const resolveUserId = (): string => {
   const tgId = WebApp.initDataUnsafe?.user?.id;
@@ -19,7 +24,7 @@ function restoreScroll(ratio: number) {
     const maxScroll = scrollH - viewH;
     const target = Math.round(ratio * maxScroll);
 
-    console.log(`[scrollSync] attempt=${attempts} ratio=${ratio} scrollH=${scrollH} viewH=${viewH} maxScroll=${maxScroll} target=${target} currentY=${window.scrollY}`);
+    remoteLog(`attempt=${attempts} ratio=${ratio} scrollH=${scrollH} viewH=${viewH} maxScroll=${maxScroll} target=${target} currentY=${window.scrollY}`);
 
     if (maxScroll > 50) {
       // Пробуем все известные методы скролла
@@ -27,7 +32,7 @@ function restoreScroll(ratio: number) {
       try { document.documentElement.scrollTop = target; } catch { /* */ }
       try { document.body.scrollTop = target; } catch { /* */ }
 
-      console.log(`[scrollSync] after scroll: scrollY=${window.scrollY}`);
+      remoteLog(`after scroll: scrollY=${window.scrollY}`);
 
       // Если позиция всё равно неправильная — повторяем ещё раз через 200ms
       // (на случай если что-то сбрасывает скролл после нас)
