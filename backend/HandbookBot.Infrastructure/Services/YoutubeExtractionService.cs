@@ -33,8 +33,18 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
 
     private async Task<YoutubeExtractResult> ExtractInternalAsync(string url, CancellationToken ct)
     {
-        var video = await youtubeClient.Videos.GetAsync(url, ct);
-        var videoTitle = video.Title;
+        string videoTitle;
+        try
+        {
+            var video = await youtubeClient.Videos.GetAsync(url, ct);
+            videoTitle = video.Title;
+        }
+        catch (YoutubeExplodeException)
+        {
+            // Watch page may be blocked from datacenter IPs; use URL as fallback title
+            var match = System.Text.RegularExpressions.Regex.Match(url, @"[?&]v=([^&]+)");
+            videoTitle = match.Success ? $"YouTube video ({match.Groups[1].Value})" : "YouTube video";
+        }
 
         var manifest = await youtubeClient.Videos.ClosedCaptions.GetManifestAsync(url, ct);
         var trackInfo = manifest.Tracks
