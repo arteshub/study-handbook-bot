@@ -5,6 +5,7 @@ using HandbookBot.Infrastructure;
 using HandbookBot.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Telegram.Bot;
+using YoutubeExplode;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +17,8 @@ builder.Services.AddControllers()
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
+
+builder.Services.AddSingleton<YoutubeClient, YoutubeClient>();
 
 builder.Services.AddCors(opt =>
     opt.AddDefaultPolicy(p => p

@@ -1,4 +1,5 @@
 using HandbookBot.Application.Common.Interfaces;
+using HandbookBot.Application.Interfaces;
 using HandbookBot.Domain.Repositories;
 using HandbookBot.Infrastructure.Bot;
 using HandbookBot.Infrastructure.Data;
@@ -23,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IPdfService, PdfService>();
         services.AddScoped<IAiService, OpenAiService>();
+        services.AddScoped<IYoutubeExtractionService, YoutubeExtractionService>();
         services.AddScoped<BotUpdateHandler>();
 
         var botToken = config["Telegram:BotToken"]!;
