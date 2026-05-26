@@ -254,30 +254,19 @@ export const TestPage = () => {
           </button>
         )}
 
-        {(reviewStats?.dueCount ?? 0) === 0 && reviewStats !== undefined && (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-green-50 border border-green-100">
-              <span className="text-2xl">✅</span>
-              <div>
-                <p className="font-semibold text-green-700">Всё повторено!</p>
-                <p className="text-sm text-green-600 opacity-80">Новые повторения появятся позже</p>
-              </div>
+        {(reviewStats?.dueCount ?? 0) === 0 && (reviewStats?.wrongCount ?? 0) > 0 && (
+          <button
+            onClick={() => start.mutate({ wrongAnswersMode: true })}
+            disabled={start.isPending}
+            className="flex items-center gap-3 p-4 rounded-2xl bg-red-50 border border-red-100 text-left hover:bg-red-100 transition-colors"
+          >
+            <span className="text-2xl">🔥</span>
+            <div className="flex-1">
+              <p className="font-bold text-base text-red-700">Отработать ошибки</p>
+              <p className="text-sm text-red-600 opacity-80">{reviewStats!.wrongCount} {reviewStats!.wrongCount === 1 ? 'вопрос' : reviewStats!.wrongCount < 5 ? 'вопроса' : 'вопросов'} из кеша</p>
             </div>
-            {(reviewStats.wrongCount ?? 0) > 0 && (
-              <button
-                onClick={() => start.mutate({ wrongAnswersMode: true })}
-                disabled={start.isPending}
-                className="flex items-center gap-3 p-4 rounded-2xl bg-red-50 border border-red-100 text-left hover:bg-red-100 transition-colors"
-              >
-                <span className="text-2xl">🔥</span>
-                <div className="flex-1">
-                  <p className="font-bold text-base text-red-700">Отработать ошибки</p>
-                  <p className="text-sm text-red-600 opacity-80">{reviewStats.wrongCount} {reviewStats.wrongCount === 1 ? 'вопрос' : reviewStats.wrongCount < 5 ? 'вопроса' : 'вопросов'} из кеша</p>
-                </div>
-                <span className="text-2xl font-bold opacity-40 text-red-500">→</span>
-              </button>
-            )}
-          </div>
+            <span className="text-2xl font-bold opacity-40 text-red-500">→</span>
+          </button>
         )}
 
         <Card>
