@@ -8,38 +8,44 @@ const resolveUserId = (): string => {
   return tgId ? String(tgId) : '12345';
 };
 
-// Ждёт пока высота страницы стабилизируется (контент отрисован), потом скроллит
 function restoreScroll(ratio: number) {
   if (ratio < 0.01) return;
 
-  let prevHeight = 0;
-  let sameCount = 0;
-  let elapsed = 0;
+  let attempts = 0;
 
   const tick = () => {
-    const h = document.documentElement.scrollHeight;
-    const maxScroll = h - window.innerHeight;
+    const scrollH = document.documentElement.scrollHeight;
+    const viewH = window.innerHeight;
+    const maxScroll = scrollH - viewH;
+    const target = Math.round(ratio * maxScroll);
 
-    if (h > window.innerHeight && h === prevHeight) {
-      sameCount++;
-    } else {
-      sameCount = 0;
-      prevHeight = h;
-    }
+    console.log(`[scrollSync] attempt=${attempts} ratio=${ratio} scrollH=${scrollH} viewH=${viewH} maxScroll=${maxScroll} target=${target} currentY=${window.scrollY}`);
 
-    if (sameCount >= 3) {
-      // Высота стабильна ≥150ms — теперь можно скроллить
-      window.scrollTo({ top: Math.round(ratio * maxScroll), behavior: 'instant' });
+    if (maxScroll > 50) {
+      // Пробуем все известные методы скролла
+      try { window.scrollTo(0, target); } catch { /* */ }
+      try { document.documentElement.scrollTop = target; } catch { /* */ }
+      try { document.body.scrollTop = target; } catch { /* */ }
+
+      console.log(`[scrollSync] after scroll: scrollY=${window.scrollY}`);
+
+      // Если позиция всё равно неправильная — повторяем ещё раз через 200ms
+      // (на случай если что-то сбрасывает скролл после нас)
+      if (attempts < 8 && Math.abs(window.scrollY - target) > 30) {
+        attempts++;
+        setTimeout(tick, 200);
+      }
       return;
     }
 
-    if (elapsed < 3000) {
-      elapsed += 50;
-      setTimeout(tick, 50);
+    // Контент ещё не отрисован — ждём
+    if (attempts < 30) {
+      attempts++;
+      setTimeout(tick, 100);
     }
   };
 
-  setTimeout(tick, 50);
+  setTimeout(tick, 150);
 }
 
 export const useScrollSync = (topicId: string | undefined, isContentReady: boolean) => {
