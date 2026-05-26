@@ -203,8 +203,10 @@ export const SubsectionPage = () => {
               </p>
             )}
             {createFromYoutube.isError && (
-              <p className="text-sm text-red-500 mt-3">
-                Не удалось сгенерировать. Проверь ссылку и наличие субтитров у видео.
+              <p className="text-sm text-red-500 mt-3 break-all">
+                {(createFromYoutube.error as any)?.response?.data?.error
+                  ?? (createFromYoutube.error as any)?.message
+                  ?? 'Неизвестная ошибка'}
               </p>
             )}
             <div className="flex gap-2 mt-4">

@@ -137,8 +137,10 @@ export const TopicEditorPage = () => {
           </p>
         )}
         {extractYoutube.isError && (
-          <p className="text-sm text-red-500 mt-3">
-            Не удалось сгенерировать. Проверь ссылку и наличие субтитров у видео.
+          <p className="text-sm text-red-500 mt-3 break-all">
+            {(extractYoutube.error as any)?.response?.data?.error
+              ?? (extractYoutube.error as any)?.message
+              ?? 'Неизвестная ошибка'}
           </p>
         )}
       </Modal>
