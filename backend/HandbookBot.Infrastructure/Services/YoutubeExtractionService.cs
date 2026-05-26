@@ -34,33 +34,35 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
         var subtitles = sb.ToString();
 
         var prompt =
-            $"Ты — опытный технический писатель. Тебе дали субтитры технического доклада \"{videoTitle}\".\n\n" +
-            $"ЗАДАЧА: написать полный технический справочник для разработчиков на основе ВСЕГО содержимого доклада.\n\n" +
-            $"ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА:\n" +
-            $"1. Воспроизводи ВЕСЬ учебный материал без исключений — каждый концепт, каждое объяснение, каждый пример, каждую деталь\n" +
-            $"2. Пропускай ТОЛЬКО: рекламные вставки, спонсорские блоки, призывы подписаться/поставить лайк, флуд не по теме\n" +
-            $"3. Технические объяснения передавай полно и точно, не сокращай и не обобщай\n" +
-            $"4. Если докладчик показывает код — обязательно воспроизводи его с поясняющими комментариями на русском\n\n" +
-            $"ФОРМАТ СТАТЬИ:\n" +
-            $"- Крупные тематические блоки: ## ЧАСТЬ I. НАЗВАНИЕ\n" +
-            $"- Пронумерованные разделы: ### 1. Название раздела [ЧЧ:ММ – ЧЧ:ММ]\n" +
-            $"- Каждый концепт: что это, зачем нужно, как работает под капотом\n" +
-            $"- Код в блоках с указанием языка, комментарии на русском\n" +
-            $"- Неформальный, но точный технический язык — как у хорошего лектора\n" +
-            $"- Сравнения с другими языками/подходами там, где докладчик упоминает\n" +
-            $"- Выделяй важные советы, антипаттерны, ловушки\n" +
-            $"- Последний раздел: ## ШПАРГАЛКА ДЛЯ СОБЕСА — таблицы, правила, быстрые ответы\n" +
-            $"- Только Markdown, весь текст на русском\n\n" +
-            $"Субтитры (с тайм-кодами):\n{subtitles}";
+            $"You are given subtitles from a technical talk titled \"{videoTitle}\".\n\n" +
+            $"YOUR TASK: produce a verbatim structured transcript — not a summary, not a rewrite. Reproduce every explanation the speaker gives in full detail. If the speaker spends 5 sentences on something, write 5 sentences, not one.\n\n" +
+            $"SKIP ONLY:\n" +
+            $"- Ads and sponsor segments\n" +
+            $"- Subscribe / like / follow calls-to-action\n" +
+            $"- Filler words and meaningless repetition\n\n" +
+            $"MUST INCLUDE EVERYTHING ELSE:\n" +
+            $"- Every technical explanation, fully and precisely\n" +
+            $"- All code examples in fenced code blocks with language tag and inline comments; if the subtitle text contains incomplete or truncated code, complete it to a working state\n" +
+            $"- All analogies and comparisons to other languages or approaches\n" +
+            $"- All \"why\", \"under the hood\", \"what actually happens\" explanations\n" +
+            $"- All tips, anti-patterns, gotchas\n" +
+            $"- All numbers, formulas, edge cases\n\n" +
+            $"OUTPUT FORMAT (Markdown only):\n" +
+            $"- Major thematic blocks: ## ЧАСТЬ I. НАЗВАНИЕ\n" +
+            $"- Numbered sections with timecodes: ### 1. Название [HH:MM – HH:MM]\n" +
+            $"- Code: fenced blocks with language, comments in Russian\n" +
+            $"- Final section: ## ШПАРГАЛКА ДЛЯ СОБЕСА — tables and quick-reference rules\n\n" +
+            $"IMPORTANT: all output text must be written in Russian.\n\n" +
+            $"Subtitles:\n{subtitles}";
 
         var chatClient = new ChatClient(
             "gpt-4o-mini",
             new ApiKeyCredential(ApiKey),
-            new OpenAIClientOptions { NetworkTimeout = TimeSpan.FromMinutes(10) });
+            new OpenAIClientOptions { NetworkTimeout = TimeSpan.FromMinutes(15) });
 
         var response = await chatClient.CompleteChatAsync(
             [new UserChatMessage(prompt)],
-            new ChatCompletionOptions { MaxOutputTokenCount = 16000 },
+            new ChatCompletionOptions { MaxOutputTokenCount = 16384 },
             ct);
 
         var content = response.Value.Content[0].Text;
