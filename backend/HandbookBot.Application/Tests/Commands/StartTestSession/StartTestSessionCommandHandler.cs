@@ -50,7 +50,9 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
         foreach (var topicId in topicIds)
         {
             var cached = await uow.CachedQuestions.GetAllByTopicAsync(topicId, TestMode.Self, ct);
-            foreach (var q in cached)
+            if (cached.Count == 0) continue;
+            var discardedIds = await uow.DiscardedQuestions.GetDiscardedIdsAsync(userId, cached.Select(q => q.Id).ToList(), ct);
+            foreach (var q in cached.Where(q => !discardedIds.Contains(q.Id)))
                 pool.Add((topicId, q.Id, q.QuestionText, q.ModelAnswer ?? string.Empty));
         }
 

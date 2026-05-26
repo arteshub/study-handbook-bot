@@ -27,3 +27,4 @@ postgres_data/
 
 # Local secrets
 **/appsettings.Development.json
+backend/HandbookBot.API/appsettings.Development.json

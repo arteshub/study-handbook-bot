@@ -1,3 +1,4 @@
+using HandbookBot.Application.Common.Interfaces;
 using HandbookBot.Application.Review.Queries.GetReviewStats;
 using HandbookBot.Application.Tests.Commands.CompleteTestSession;
 using HandbookBot.Application.Tests.Commands.SkipQuestion;
@@ -8,13 +9,15 @@ using HandbookBot.Application.Tests.Queries.GetNextQuestion;
 using HandbookBot.Application.Tests.Queries.GetTestHistory;
 using HandbookBot.Application.Tests.Queries.GetTestSession;
 using HandbookBot.Domain.Entities;
-using HandbookBot.Domain.Repositories;
 using HandbookBot.Domain.Enums;
+using HandbookBot.Domain.Repositories;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 
 namespace HandbookBot.API.Controllers;
 
-public sealed class TestsController(IUnitOfWork uow) : BaseController
+public sealed class TestsController(IUnitOfWork uow, IServiceScopeFactory scopeFactory) : BaseController
 {
     [HttpGet("review/stats")]
     public async Task<IActionResult> GetReviewStats(CancellationToken ct) =>
@@ -76,8 +79,12 @@ public sealed class TestsController(IUnitOfWork uow) : BaseController
         var exists = await uow.DiscardedQuestions.ExistsAsync(CurrentUserId, cachedQuestionId, ct);
         if (!exists)
         {
+            var cached = await uow.CachedQuestions.GetByIdAsync(cachedQuestionId, ct);
             await uow.DiscardedQuestions.AddAsync(DiscardedQuestion.Create(CurrentUserId, cachedQuestionId), ct);
             await uow.SaveChangesAsync(ct);
+
+            if (cached is not null)
+                _ = RegenerateAsync(cachedQuestionId, cached.TopicId, cached.Mode, cached.ContentHash, scopeFactory);
         }
         return NoContent();
     }
@@ -88,6 +95,44 @@ public sealed class TestsController(IUnitOfWork uow) : BaseController
         await uow.DiscardedQuestions.DeleteAsync(CurrentUserId, cachedQuestionId, ct);
         await uow.SaveChangesAsync(ct);
         return NoContent();
+    }
+
+    private static async Task RegenerateAsync(Guid cachedQuestionId, Guid topicId, TestMode mode, string contentHash, IServiceScopeFactory scopeFactory)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var cacheUow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var ai = scope.ServiceProvider.GetRequiredService<IAiService>();
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+            var ct = cts.Token;
+
+            await cacheUow.CachedQuestions.DeleteByIdAsync(cachedQuestionId, ct);
+            await cacheUow.DiscardedQuestions.DeleteAllByCachedQuestionAsync(cachedQuestionId, ct);
+            await cacheUow.SaveChangesAsync(ct);
+
+            var topic = await cacheUow.Topics.GetByIdAsync(topicId, ct);
+            if (topic is null || string.IsNullOrWhiteSpace(topic.Content)) return;
+
+            if (mode == TestMode.AI)
+            {
+                var qas = await ai.GenerateQuestionsAsync(topic.Title, topic.Content, 1, ct);
+                if (qas.Count == 0) return;
+                var q = qas[0];
+                var newQ = CachedQuestion.CreateAi(topicId, contentHash, q.Question,
+                    JsonSerializer.Serialize(q.Options.Select((o, i) => new { i, o.Text, o.IsCorrect, o.Explanation })));
+                await cacheUow.CachedQuestions.AddRangeAsync([newQ], ct);
+            }
+            else
+            {
+                var qas = await ai.GenerateSelfTestQuestionsAsync(topic.Title, topic.Content, 1, ct);
+                if (qas.Count == 0) return;
+                var newQ = CachedQuestion.CreateSelf(topicId, contentHash, qas[0].Question, qas[0].ModelAnswer);
+                await cacheUow.CachedQuestions.AddRangeAsync([newQ], ct);
+            }
+            await cacheUow.SaveChangesAsync(ct);
+        }
+        catch { }
     }
 }
 

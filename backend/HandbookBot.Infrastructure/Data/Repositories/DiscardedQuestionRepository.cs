@@ -28,4 +28,12 @@ internal sealed class DiscardedQuestionRepository(AppDbContext db) : IDiscardedQ
             .FirstOrDefaultAsync(d => d.UserId == userId && d.CachedQuestionId == cachedQuestionId, ct);
         if (row is not null) db.DiscardedQuestions.Remove(row);
     }
+
+    public async Task DeleteAllByCachedQuestionAsync(Guid cachedQuestionId, CancellationToken ct = default)
+    {
+        var rows = await db.DiscardedQuestions
+            .Where(d => d.CachedQuestionId == cachedQuestionId)
+            .ToListAsync(ct);
+        if (rows.Count > 0) db.DiscardedQuestions.RemoveRange(rows);
+    }
 }

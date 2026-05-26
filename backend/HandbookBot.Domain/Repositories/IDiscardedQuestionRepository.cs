@@ -8,4 +8,5 @@ public interface IDiscardedQuestionRepository
     Task<bool> ExistsAsync(long userId, Guid cachedQuestionId, CancellationToken ct = default);
     Task AddAsync(DiscardedQuestion discard, CancellationToken ct = default);
     Task DeleteAsync(long userId, Guid cachedQuestionId, CancellationToken ct = default);
+    Task DeleteAllByCachedQuestionAsync(Guid cachedQuestionId, CancellationToken ct = default);
 }

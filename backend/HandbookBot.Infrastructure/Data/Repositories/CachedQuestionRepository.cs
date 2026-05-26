@@ -23,8 +23,17 @@ internal sealed class CachedQuestionRepository(AppDbContext db) : ICachedQuestio
             .Where(q => topicIds.Contains(q.TopicId) && q.Mode == mode)
             .CountAsync(ct);
 
+    public async Task<CachedQuestion?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
+        await db.CachedQuestions.FindAsync([id], ct);
+
     public async Task AddRangeAsync(IEnumerable<CachedQuestion> questions, CancellationToken ct = default) =>
         await db.CachedQuestions.AddRangeAsync(questions, ct);
+
+    public async Task DeleteByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        var q = await db.CachedQuestions.FindAsync([id], ct);
+        if (q is not null) db.CachedQuestions.Remove(q);
+    }
 
     public async Task DeleteStaleAsync(Guid topicId, TestMode mode, string currentContentHash, CancellationToken ct = default)
     {
