@@ -14,7 +14,8 @@ const resolveUserId = (): string => {
 };
 
 function restoreScroll(ratio: number) {
-  if (ratio < 0.01) return;
+  remoteLog(`restoreScroll called ratio=${ratio}`);
+  if (ratio < 0.01) { remoteLog('ratio too small, skipping'); return; }
 
   let attempts = 0;
 
@@ -66,8 +67,8 @@ export const useScrollSync = (topicId: string | undefined, isContentReady: boole
     setSavedRatio(null);
 
     readingPositionsApi.get(topicId)
-      .then(({ scrollRatio }) => setSavedRatio(scrollRatio))
-      .catch(() => setSavedRatio(0));
+      .then(({ scrollRatio }) => { remoteLog(`fetched ratio=${scrollRatio}`); setSavedRatio(scrollRatio); })
+      .catch((e) => { remoteLog(`fetch failed: ${String(e)}`); setSavedRatio(0); });
   }, [topicId]);
 
   // SignalR соединение и сохранение скролла
