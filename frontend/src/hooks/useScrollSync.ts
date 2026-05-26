@@ -8,14 +8,38 @@ const resolveUserId = (): string => {
   return tgId ? String(tgId) : '12345';
 };
 
-function restoreScroll(ratio: number, attempts = 0) {
+// Ждёт пока высота страницы стабилизируется (контент отрисован), потом скроллит
+function restoreScroll(ratio: number) {
   if (ratio < 0.01) return;
-  const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-  if (maxScroll > 50) {
-    window.scrollTo({ top: ratio * maxScroll, behavior: 'instant' });
-  } else if (attempts < 20) {
-    setTimeout(() => restoreScroll(ratio, attempts + 1), 100);
-  }
+
+  let prevHeight = 0;
+  let sameCount = 0;
+  let elapsed = 0;
+
+  const tick = () => {
+    const h = document.documentElement.scrollHeight;
+    const maxScroll = h - window.innerHeight;
+
+    if (h > window.innerHeight && h === prevHeight) {
+      sameCount++;
+    } else {
+      sameCount = 0;
+      prevHeight = h;
+    }
+
+    if (sameCount >= 3) {
+      // Высота стабильна ≥150ms — теперь можно скроллить
+      window.scrollTo({ top: Math.round(ratio * maxScroll), behavior: 'instant' });
+      return;
+    }
+
+    if (elapsed < 3000) {
+      elapsed += 50;
+      setTimeout(tick, 50);
+    }
+  };
+
+  setTimeout(tick, 50);
 }
 
 export const useScrollSync = (topicId: string | undefined, isContentReady: boolean) => {
