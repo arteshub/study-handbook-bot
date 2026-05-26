@@ -405,23 +405,23 @@ export const TestPage = () => {
 
         {/* Question */}
         <Card className="mb-4">
-          {question.cachedQuestionId && (
-            <div className="flex justify-end mb-2">
+          <div className="flex items-start gap-2">
+            <p className="text-base font-semibold leading-snug flex-1">{question.question}</p>
+            {question.cachedQuestionId && (
               <button
                 onClick={toggleDiscard}
                 disabled={discarding}
                 title={discardedIds.has(question.cachedQuestionId) ? 'Снять пометку' : 'Пересоздать вопрос при следующем тесте'}
-                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${
+                className={`w-7 h-7 flex items-center justify-center rounded-lg shrink-0 transition-colors ${
                   discardedIds.has(question.cachedQuestionId)
                     ? 'bg-red-100 text-red-500'
                     : 'text-red-300 hover:bg-red-50 hover:text-red-400'
                 } disabled:opacity-40`}
               >
-                <Trash2 size={16} />
+                <Trash2 size={15} />
               </button>
-            </div>
-          )}
-          <p className="text-base font-semibold leading-snug">{question.question}</p>
+            )}
+          </div>
         </Card>
 
         {isMultiChoice ? (
