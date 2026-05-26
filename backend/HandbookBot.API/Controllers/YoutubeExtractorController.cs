@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace HandbookBot.API.Controllers;
 
+[Route("api/youtube-extractor")]
 public class YoutubeExtractorController : BaseController
 {
     [HttpPost]
