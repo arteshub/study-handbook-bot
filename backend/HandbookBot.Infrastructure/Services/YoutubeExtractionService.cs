@@ -13,6 +13,8 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
 {
     private string ApiKey => config["OpenAI:ApiKey"] ?? throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
 
+    private const int ChunkMinutes = 10;
+
     public async Task<YoutubeExtractResult> ExtractAndGenerateAsync(string url, CancellationToken ct = default)
     {
         try
@@ -42,14 +44,64 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
 
         var track = await youtubeClient.Videos.ClosedCaptions.GetAsync(trackInfo, ct);
 
-        var sb = new StringBuilder();
+        var lines = new List<string>();
         foreach (var caption in track.Captions)
         {
             var offset = caption.Offset;
-            sb.AppendLine($"[{(int)offset.TotalMinutes:D2}:{offset.Seconds:D2}] {caption.Text}");
+            lines.Add($"[{(int)offset.TotalMinutes:D2}:{offset.Seconds:D2}] {caption.Text}");
         }
-        var subtitles = sb.ToString();
 
+        var chunks = SplitIntoChunks(lines, ChunkMinutes);
+        var client = CreateClient();
+
+        var parts = new List<string>();
+        for (int i = 0; i < chunks.Count; i++)
+        {
+            var part = await GenerateChunkAsync(client, videoTitle, chunks[i], i + 1, chunks.Count, ct);
+            parts.Add(part);
+        }
+
+        var content = string.Join("\n\n", parts);
+        return new YoutubeExtractResult(videoTitle, content);
+    }
+
+    private static List<string> SplitIntoChunks(List<string> lines, int chunkMinutes)
+    {
+        var chunks = new List<string>();
+        var current = new StringBuilder();
+        int chunkStart = 0;
+
+        foreach (var line in lines)
+        {
+            // parse [MM:SS] at start of each line
+            if (line.Length >= 7 && line[0] == '[')
+            {
+                var colon = line.IndexOf(':');
+                var close = line.IndexOf(']');
+                if (colon > 0 && close > colon &&
+                    int.TryParse(line[1..colon], out int mins))
+                {
+                    if (mins >= chunkStart + chunkMinutes && current.Length > 0)
+                    {
+                        chunks.Add(current.ToString().TrimEnd());
+                        current.Clear();
+                        chunkStart = mins;
+                    }
+                }
+            }
+            current.AppendLine(line);
+        }
+
+        if (current.Length > 0)
+            chunks.Add(current.ToString().TrimEnd());
+
+        return chunks;
+    }
+
+    private static async Task<string> GenerateChunkAsync(
+        ChatClient client, string videoTitle, string subtitleChunk,
+        int partIndex, int totalParts, CancellationToken ct)
+    {
         const string styleExample =
             "## ЧАСТЬ I. МАССИВЫ\n\n" +
             "### 1. Что такое массив [00:42 – 01:46]\n\n" +
@@ -57,65 +109,53 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
             "У каждого элемента есть:\n\n" +
             "- адрес — место в памяти\n" +
             "- размер — сколько байт занимает\n\n" +
-            "Индексация начинается с нуля. Пример: если элементы по 2 байта и массив из 4 элементов — то элементы располагаются последовательно один за другим. Слева и справа от массива в памяти — чужие данные, не принадлежащие массиву.\n\n" +
-            "### 2. Создание массива — все варианты синтаксиса [01:46 – 02:49]\n\n" +
+            "Индексация начинается с нуля. Слева и справа от массива в памяти — чужие данные, не принадлежащие массиву.\n\n" +
+            "### 2. Создание массива [01:46 – 02:49]\n\n" +
             "```go\n" +
             "// 1) Просто объявление - zero value у int это 0\n" +
             "var a [5]int\n\n" +
             "// 2) С инициализацией части - остальные элементы zero value\n" +
-            "b := [5]int{1, 2, 3}  // [1 2 3 0 0]\n\n" +
-            "// 3) Три точки - компилятор сам считает количество элементов\n" +
-            "c := [...]int{1, 2, 3}  // тип [3]int\n" +
+            "b := [5]int{1, 2, 3}  // [1 2 3 0 0]\n" +
             "```\n\n" +
-            "Ключевой принцип: массив всегда инициализируется zero value соответствующего типа. У int это 0.\n\n" +
-            "### 3. Массив — это НЕ указатель [05:36 – 06:18]\n\n" +
-            "Многие говорят: «массив указывает на какую-то область памяти». Это неверно. Внутри массива нет никаких указателей. Массив — это просто структура данных, у которой есть адрес начала, длина (зашита в типе) и размер элемента.\n\n" +
-            "## ШПАРГАЛКА ДЛЯ СОБЕСА\n\n" +
-            "| | Массив | Слайс |\n" +
-            "|---|---|---|\n" +
-            "| Размер | Часть типа, фиксированный | Динамический |\n" +
-            "| Zero value | Все элементы zero (НЕ nil) | nil |\n" +
-            "| Сравнение | ==, != | Только slices.Equal |";
+            "Ключевой принцип: массив всегда инициализируется zero value. У int это 0.";
+
+        var isLast = partIndex == totalParts;
+        var cheatsheetInstruction = isLast
+            ? "After the last section, add a final ## ШПАРГАЛКА ДЛЯ СОБЕСА block with structured tables and quick-reference rules summarising the key points from the ENTIRE talk (not just this segment).\n\n"
+            : "Do NOT generate a шпаргалка — it will be added after all parts are processed.\n\n";
 
         var prompt =
-            $"You are given subtitles from a technical talk titled \"{videoTitle}\".\n\n" +
-            $"YOUR TASK: reproduce the entire talk as a structured reference article. This is NOT a summary — it is a faithful, detailed reconstruction of everything the speaker says.\n\n" +
-            $"AUTHOR'S STYLE — match it exactly. Here is a concrete example of the required output style:\n\n" +
-            $"---\n{styleExample}\n---\n\n" +
-            $"STYLE RULES (derived from the example above):\n" +
-            $"- Conversational but precise technical language — write exactly as a good lecturer speaks\n" +
-            $"- Every concept gets: what it is, why it works this way, what happens under the hood\n" +
-            $"- Comparisons with other languages when the speaker mentions them — include them fully\n" +
-            $"- \"Many people mistakenly think...\", \"This is important\", \"Note that...\" — keep all such emphasis\n" +
-            $"- Explain every nuance the speaker explains; if they say something twice for emphasis, reflect that emphasis\n\n" +
-            $"SKIP ONLY:\n" +
-            $"- Ads and sponsor segments\n" +
-            $"- Subscribe / like / follow calls-to-action\n" +
-            $"- Pure filler with zero informational content\n\n" +
-            $"MUST INCLUDE:\n" +
-            $"- Every technical explanation in full — if the speaker uses 5 sentences, write 5 sentences, not one\n" +
-            $"- All code examples in fenced blocks with language tag and Russian inline comments; complete any truncated code to working state\n" +
-            $"- All analogies, all \"why\", all \"under the hood\" explanations\n" +
+            $"You are given subtitles for segment {partIndex} of {totalParts} of the technical talk \"{videoTitle}\".\n\n" +
+            $"YOUR TASK: reproduce this segment as a structured article — NOT a summary. Reproduce every explanation the speaker gives in full detail. If the speaker uses 5 sentences, write 5 sentences.\n\n" +
+            $"AUTHOR'S STYLE — match it exactly. Example:\n\n---\n{styleExample}\n---\n\n" +
+            $"STYLE RULES:\n" +
+            $"- Conversational but precise — write exactly as a good lecturer speaks\n" +
+            $"- Every concept: what it is, why it works this way, what happens under the hood\n" +
+            $"- Include all comparisons with other languages, all analogies, all emphasis (\"Many people mistakenly think...\", \"This is important\")\n" +
+            $"- Every nuance the speaker explains must appear in the output\n\n" +
+            $"SKIP ONLY: ads, sponsor segments, subscribe/like calls-to-action, pure filler.\n\n" +
+            $"MUST INCLUDE EVERYTHING ELSE:\n" +
+            $"- Every technical explanation in full\n" +
+            $"- All code in fenced blocks with language tag and Russian inline comments; complete any truncated code to working state\n" +
             $"- All tips, anti-patterns, gotchas, edge cases, numbers, formulas\n\n" +
-            $"OUTPUT FORMAT (Markdown only):\n" +
-            $"- Major thematic blocks: ## ЧАСТЬ I. НАЗВАНИЕ\n" +
-            $"- Numbered sections with timecodes: ### 1. Название [HH:MM – HH:MM]\n" +
-            $"- Code: fenced blocks with language, Russian comments\n" +
-            $"- Final section: ## ШПАРГАЛКА ДЛЯ СОБЕСА — tables and quick-reference rules\n\n" +
+            $"FORMAT:\n" +
+            $"- Number sections continuing from where segment {partIndex - 1} left off (start section numbering fresh only if this is segment 1)\n" +
+            $"- Sections: ### N. Название [HH:MM – HH:MM]\n" +
+            $"- Use ## ЧАСТЬ headers for major thematic shifts\n" +
+            $"{cheatsheetInstruction}" +
             $"IMPORTANT: all output text must be written in Russian.\n\n" +
-            $"Subtitles:\n{subtitles}";
+            $"Subtitles (segment {partIndex}/{totalParts}):\n{subtitleChunk}";
 
-        var chatClient = new ChatClient(
-            "gpt-4o-mini",
-            new ApiKeyCredential(ApiKey),
-            new OpenAIClientOptions { NetworkTimeout = TimeSpan.FromMinutes(15) });
-
-        var response = await chatClient.CompleteChatAsync(
+        var response = await client.CompleteChatAsync(
             [new UserChatMessage(prompt)],
             new ChatCompletionOptions { MaxOutputTokenCount = 16384 },
             ct);
 
-        var content = response.Value.Content[0].Text;
-        return new YoutubeExtractResult(videoTitle, content);
+        return response.Value.Content[0].Text;
     }
+
+    private ChatClient CreateClient() => new(
+        "gpt-4o-mini",
+        new ApiKeyCredential(ApiKey),
+        new OpenAIClientOptions { NetworkTimeout = TimeSpan.FromMinutes(15) });
 }
