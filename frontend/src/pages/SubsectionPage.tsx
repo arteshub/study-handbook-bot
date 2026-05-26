@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CirclePlay, FileText, Folder, PenLine, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, CirclePlay, Folder, PenLine, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { subsectionsApi } from '../api/subsections';
