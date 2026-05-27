@@ -11,6 +11,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
+import { useGenerationProgress } from '../hooks/useGenerationProgress';
 
 type AddMode = 'topic' | 'folder' | null;
 type CreateMode = null | 'manual' | 'youtube';
@@ -30,6 +31,12 @@ export const SubsectionPage = () => {
     queryFn: () => topicsApi.getBySubsectionId(id!),
   });
 
+  const { jobs, addJob } = useGenerationProgress((topicId) => {
+    qc.invalidateQueries({ queryKey: ['topics', id] });
+  });
+
+  const activeJobs = [...jobs.values()].filter(j => !j.isCompleted);
+
   const deleteSub = useMutation({
     mutationFn: () => subsectionsApi.delete(id!),
     onSuccess: () => navigate(-1),
@@ -43,26 +50,23 @@ export const SubsectionPage = () => {
     },
   });
 
-  const createFromYoutube = useMutation({
-    mutationFn: async () => {
-      const result = await youtubeApi.extract(ytUrl);
-      return topicsApi.create(id!, { title: result.title, content: result.content, summary: '' });
-    },
+  const startFromYoutube = useMutation({
+    mutationFn: () => youtubeApi.startGeneration(ytUrl, id!),
     onSuccess: data => {
+      addJob({ topicId: data.topicId, videoTitle: '...', progress: 0, isCompleted: false });
       qc.invalidateQueries({ queryKey: ['topics', id] });
       closeTopicModal();
-      navigate(`/topics/${data.id}/edit`);
     },
   });
 
   const closeTopicModal = () => {
-    if (createFromYoutube.isPending) return;
+    if (startFromYoutube.isPending) return;
     setAddMode(null);
     setCreateMode(null);
     setTitle('');
     setYtUrl('');
     createManual.reset();
-    createFromYoutube.reset();
+    startFromYoutube.reset();
   };
 
   if (isLoading) return <Spinner />;
@@ -93,8 +97,31 @@ export const SubsectionPage = () => {
         </button>
       </div>
 
-      <div className="px-4 pt-4">
-        {topics?.length === 0
+      <div className="px-4 pt-4 flex flex-col gap-3">
+        {activeJobs.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {activeJobs.map(job => (
+              <div key={job.topicId} className="rounded-xl bg-red-50 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <CirclePlay size={14} className="text-red-500 shrink-0" />
+                  <span className="text-sm font-medium truncate flex-1">{job.videoTitle}</span>
+                  <span className="text-xs font-semibold text-red-500 shrink-0">{job.progress}%</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-red-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-red-500 transition-all duration-500"
+                    style={{ width: `${job.progress}%` }}
+                  />
+                </div>
+                {job.error && (
+                  <p className="text-xs text-red-600 mt-1.5 break-all">{job.error}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {topics?.length === 0 && activeJobs.length === 0
           ? (
             <EmptyState
               icon="📝"
@@ -195,27 +222,27 @@ export const SubsectionPage = () => {
               placeholder="https://youtube.com/watch?v=..."
               value={ytUrl}
               onChange={e => setYtUrl(e.target.value)}
-              disabled={createFromYoutube.isPending}
+              disabled={startFromYoutube.isPending}
             />
-            {createFromYoutube.isPending && (
+            {startFromYoutube.isPending && (
               <p className="text-sm opacity-60 mt-3 text-center">
-                Извлекаю субтитры и генерирую статью — может занять несколько минут
+                Запускаю генерацию...
               </p>
             )}
-            {createFromYoutube.isError && (
+            {startFromYoutube.isError && (
               <p className="text-sm text-red-500 mt-3 break-all">
-                {(createFromYoutube.error as any)?.response?.data?.error
-                  ?? (createFromYoutube.error as any)?.message
+                {(startFromYoutube.error as any)?.response?.data?.error
+                  ?? (startFromYoutube.error as any)?.message
                   ?? 'Неизвестная ошибка'}
               </p>
             )}
             <div className="flex gap-2 mt-4">
-              <Button variant="secondary" className="flex-1" onClick={() => setCreateMode(null)} disabled={createFromYoutube.isPending}>Назад</Button>
+              <Button variant="secondary" className="flex-1" onClick={() => setCreateMode(null)} disabled={startFromYoutube.isPending}>Назад</Button>
               <Button
                 className="flex-1"
-                loading={createFromYoutube.isPending}
-                disabled={!ytUrl.trim() || createFromYoutube.isPending}
-                onClick={() => createFromYoutube.mutate()}
+                loading={startFromYoutube.isPending}
+                disabled={!ytUrl.trim() || startFromYoutube.isPending}
+                onClick={() => startFromYoutube.mutate()}
               >
                 Создать
               </Button>

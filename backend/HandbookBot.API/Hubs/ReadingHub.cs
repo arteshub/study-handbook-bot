@@ -6,6 +6,14 @@ namespace HandbookBot.API.Hubs;
 
 public sealed class ReadingHub(IUnitOfWork uow) : Hub
 {
+    public override async Task OnConnectedAsync()
+    {
+        var userId = GetUserId();
+        if (userId is not null)
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"user-{userId}");
+        await base.OnConnectedAsync();
+    }
+
     public async Task SaveScrollPosition(string topicId, float scrollRatio)
     {
         var userId = GetUserId();

@@ -1,6 +1,7 @@
 using HandbookBot.API.Hubs;
 using HandbookBot.API.Middleware;
 using HandbookBot.Application;
+using HandbookBot.Application.Interfaces;
 using HandbookBot.Infrastructure;
 using HandbookBot.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSignalR();
 
 builder.Services.AddSingleton<YoutubeClient, YoutubeClient>();
+builder.Services.AddScoped<IGenerationProgressNotifier, SignalRGenerationProgressNotifier>();
 
 builder.Services.AddCors(opt =>
     opt.AddDefaultPolicy(p => p

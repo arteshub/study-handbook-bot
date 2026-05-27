@@ -1,3 +1,4 @@
+using HandbookBot.Application.Interfaces;
 using HandbookBot.Application.YoutubeExtraction;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,4 +13,19 @@ public class YoutubeExtractorController : BaseController
         var result = await Mediator.Send(new YoutubeExtractCommand(url), ct);
         return Ok(result);
     }
+
+    [HttpPost("start")]
+    public async Task<IActionResult> StartGeneration([FromBody] StartGenerationRequest req, CancellationToken ct)
+    {
+        var topicId = await Mediator.Send(new StartYoutubeGenerationCommand(req.Url, req.SubsectionId, CurrentUserId), ct);
+        return Ok(new { topicId });
+    }
+
+    [HttpGet("active")]
+    public IActionResult GetActiveJobs([FromServices] IBackgroundGenerationService backgroundService)
+    {
+        return Ok(backgroundService.GetActiveJobs(CurrentUserId));
+    }
 }
+
+public sealed record StartGenerationRequest(string Url, Guid SubsectionId);

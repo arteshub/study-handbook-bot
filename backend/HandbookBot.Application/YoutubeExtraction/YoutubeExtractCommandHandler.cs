@@ -7,5 +7,5 @@ public class YoutubeExtractCommandHandler(IYoutubeExtractionService youtubeServi
     : IRequestHandler<YoutubeExtractCommand, YoutubeExtractResult>
 {
     public Task<YoutubeExtractResult> Handle(YoutubeExtractCommand request, CancellationToken cancellationToken)
-        => youtubeService.ExtractAndGenerateAsync(request.Url, cancellationToken);
+        => youtubeService.ExtractAndGenerateAsync(request.Url, null, cancellationToken);
 }

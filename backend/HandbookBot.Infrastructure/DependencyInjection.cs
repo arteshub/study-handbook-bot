@@ -25,6 +25,8 @@ public static class DependencyInjection
         services.AddScoped<IPdfService, PdfService>();
         services.AddScoped<IAiService, OpenAiService>();
         services.AddScoped<IYoutubeExtractionService, YoutubeExtractionService>();
+        services.AddScoped<INotificationService, TelegramNotificationService>();
+        services.AddSingleton<IBackgroundGenerationService, BackgroundGenerationService>();
         services.AddScoped<BotUpdateHandler>();
 
         var botToken = config["Telegram:BotToken"]!;

@@ -15,11 +15,25 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
 
     private const int ChunkMinutes = 10;
 
-    public async Task<YoutubeExtractResult> ExtractAndGenerateAsync(string url, CancellationToken ct = default)
+    public async Task<string> GetVideoTitleAsync(string url, CancellationToken ct = default)
     {
         try
         {
-            return await ExtractInternalAsync(url, ct);
+            var video = await youtubeClient.Videos.GetAsync(url, ct);
+            return video.Title;
+        }
+        catch (YoutubeExplodeException)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(url, @"[?&]v=([^&]+)");
+            return match.Success ? $"YouTube video ({match.Groups[1].Value})" : "YouTube video";
+        }
+    }
+
+    public async Task<YoutubeExtractResult> ExtractAndGenerateAsync(string url, IProgress<int>? progress = null, CancellationToken ct = default)
+    {
+        try
+        {
+            return await ExtractInternalAsync(url, progress, ct);
         }
         catch (VideoUnavailableException ex)
         {
@@ -31,7 +45,7 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
         }
     }
 
-    private async Task<YoutubeExtractResult> ExtractInternalAsync(string url, CancellationToken ct)
+    private async Task<YoutubeExtractResult> ExtractInternalAsync(string url, IProgress<int>? progress, CancellationToken ct)
     {
         string videoTitle;
         try
@@ -44,14 +58,17 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
             var match = System.Text.RegularExpressions.Regex.Match(url, @"[?&]v=([^&]+)");
             videoTitle = match.Success ? $"YouTube video ({match.Groups[1].Value})" : "YouTube video";
         }
+        progress?.Report(5);
 
         var manifest = await youtubeClient.Videos.ClosedCaptions.GetManifestAsync(url, ct);
         var trackInfo = manifest.Tracks
             .FirstOrDefault(t => t.Language.Code.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
             ?? manifest.Tracks.FirstOrDefault()
             ?? throw new InvalidOperationException("Видео не содержит субтитров.");
+        progress?.Report(10);
 
         var track = await youtubeClient.Videos.ClosedCaptions.GetAsync(trackInfo, ct);
+        progress?.Report(15);
 
         var lines = new List<string>();
         foreach (var caption in track.Captions)
@@ -65,8 +82,12 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
 
         var parts = new List<string>();
         for (int i = 0; i < chunks.Count; i++)
+        {
             parts.Add(await GenerateChunkAsync(client, videoTitle, chunks[i], i + 1, chunks.Count, ct));
+            progress?.Report(15 + (int)((i + 1.0) / chunks.Count * 80));
+        }
 
+        progress?.Report(100);
         return new YoutubeExtractResult(videoTitle, string.Join("\n\n", parts));
     }
 
