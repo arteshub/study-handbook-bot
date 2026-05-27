@@ -228,19 +228,10 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
     private static int QuestionsCountForContent(string content, TestMode mode)
     {
         var len = content.Length;
-        if (mode == TestMode.AI)
-        {
-            if (len < 500)   return 15;
-            if (len < 2000)  return 21;
-            if (len < 5000)  return 28;
-            return 35;
-        }
-        // Self mode — Q+A is much more token-efficient, so higher counts are feasible
-        if (len < 500)   return 21;
-        if (len < 2000)  return 30;
-        if (len < 5000)  return 50;
-        if (len < 10000) return 70;
-        return 100;
+        if (len < 500)  return 8;
+        if (len < 2000) return 12;
+        if (len < 5000) return 16;
+        return 20;
     }
 
     private async Task CollectRecursiveAsync(Guid topicId, List<Topic> result, CancellationToken ct)
