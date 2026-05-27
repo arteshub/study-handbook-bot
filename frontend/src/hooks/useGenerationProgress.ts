@@ -11,7 +11,7 @@ export interface GenerationProgress {
   error?: string;
 }
 
-export const useGenerationProgress = (onJobCompleted: (topicId: string) => void) => {
+export const useGenerationProgress = (onJobCompleted: () => void) => {
   const [jobs, setJobs] = useState<Map<string, GenerationProgress>>(new Map());
   const onJobCompletedRef = useRef(onJobCompleted);
   useEffect(() => { onJobCompletedRef.current = onJobCompleted; });
@@ -43,7 +43,7 @@ export const useGenerationProgress = (onJobCompleted: (topicId: string) => void)
         return next;
       });
       if (data.isCompleted) {
-        onJobCompletedRef.current(data.topicId);
+        onJobCompletedRef.current();
         setTimeout(() => {
           setJobs(prev => {
             const next = new Map(prev);

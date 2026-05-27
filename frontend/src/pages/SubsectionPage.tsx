@@ -31,7 +31,7 @@ export const SubsectionPage = () => {
     queryFn: () => topicsApi.getBySubsectionId(id!),
   });
 
-  const { jobs, addJob } = useGenerationProgress((topicId) => {
+  const { jobs, addJob } = useGenerationProgress(() => {
     qc.invalidateQueries({ queryKey: ['topics', id] });
   });
 
