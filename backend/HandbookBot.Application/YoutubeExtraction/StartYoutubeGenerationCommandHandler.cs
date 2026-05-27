@@ -9,9 +9,9 @@ public class StartYoutubeGenerationCommandHandler(
     IUnitOfWork uow,
     IYoutubeExtractionService youtubeService,
     IBackgroundGenerationService backgroundService)
-    : IRequestHandler<StartYoutubeGenerationCommand, Guid>
+    : IRequestHandler<StartYoutubeGenerationCommand, StartGenerationResult>
 {
-    public async Task<Guid> Handle(StartYoutubeGenerationCommand request, CancellationToken cancellationToken)
+    public async Task<StartGenerationResult> Handle(StartYoutubeGenerationCommand request, CancellationToken cancellationToken)
     {
         var videoTitle = await youtubeService.GetVideoTitleAsync(request.Url, cancellationToken);
 
@@ -27,6 +27,6 @@ public class StartYoutubeGenerationCommandHandler(
             throw new InvalidOperationException("Максимум 2 одновременных генерации. Дождитесь завершения текущих.");
         }
 
-        return topic.Id;
+        return new StartGenerationResult(topic.Id, videoTitle);
     }
 }

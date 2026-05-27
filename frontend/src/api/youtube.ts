@@ -19,7 +19,7 @@ export const youtubeApi = {
     }).then(r => r.data),
 
   startGeneration: (url: string, subsectionId: string) =>
-    apiClient.post<{ topicId: string }>('/youtube-extractor/start', { url, subsectionId })
+    apiClient.post<{ topicId: string; videoTitle: string }>('/youtube-extractor/start', { url, subsectionId })
       .then(r => r.data),
 
   getActiveJobs: () =>

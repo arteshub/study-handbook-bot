@@ -17,8 +17,8 @@ public class YoutubeExtractorController : BaseController
     [HttpPost("start")]
     public async Task<IActionResult> StartGeneration([FromBody] StartGenerationRequest req, CancellationToken ct)
     {
-        var topicId = await Mediator.Send(new StartYoutubeGenerationCommand(req.Url, req.SubsectionId, CurrentUserId), ct);
-        return Ok(new { topicId });
+        var result = await Mediator.Send(new StartYoutubeGenerationCommand(req.Url, req.SubsectionId, CurrentUserId), ct);
+        return Ok(new { result.TopicId, result.VideoTitle });
     }
 
     [HttpGet("active")]

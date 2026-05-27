@@ -11,7 +11,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
-import { useGenerationProgress } from '../hooks/useGenerationProgress';
+import { useGenerationProgress } from '../context/GenerationProgressContext';
 
 type AddMode = 'topic' | 'folder' | null;
 type CreateMode = null | 'manual' | 'youtube';
@@ -31,11 +31,7 @@ export const SubsectionPage = () => {
     queryFn: () => topicsApi.getBySubsectionId(id!),
   });
 
-  const { jobs, addJob } = useGenerationProgress(() => {
-    qc.invalidateQueries({ queryKey: ['topics', id] });
-  });
-
-  const activeJobs = [...jobs.values()].filter(j => !j.isCompleted);
+  const { addJob } = useGenerationProgress();
 
   const deleteSub = useMutation({
     mutationFn: () => subsectionsApi.delete(id!),
@@ -53,7 +49,7 @@ export const SubsectionPage = () => {
   const startFromYoutube = useMutation({
     mutationFn: () => youtubeApi.startGeneration(ytUrl, id!),
     onSuccess: data => {
-      addJob({ topicId: data.topicId, videoTitle: '...', progress: 0, isCompleted: false });
+      addJob({ topicId: data.topicId, videoTitle: data.videoTitle, progress: 0, isCompleted: false });
       qc.invalidateQueries({ queryKey: ['topics', id] });
       closeTopicModal();
     },
@@ -97,31 +93,8 @@ export const SubsectionPage = () => {
         </button>
       </div>
 
-      <div className="px-4 pt-4 flex flex-col gap-3">
-        {activeJobs.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {activeJobs.map(job => (
-              <div key={job.topicId} className="rounded-xl bg-red-50 p-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <CirclePlay size={14} className="text-red-500 shrink-0" />
-                  <span className="text-sm font-medium truncate flex-1">{job.videoTitle}</span>
-                  <span className="text-xs font-semibold text-red-500 shrink-0">{job.progress}%</span>
-                </div>
-                <div className="w-full h-1.5 rounded-full bg-red-100 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-red-500 transition-all duration-500"
-                    style={{ width: `${job.progress}%` }}
-                  />
-                </div>
-                {job.error && (
-                  <p className="text-xs text-red-600 mt-1.5 break-all">{job.error}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {topics?.length === 0 && activeJobs.length === 0
+      <div className="px-4 pt-4">
+        {topics?.length === 0
           ? (
             <EmptyState
               icon="📝"
@@ -225,9 +198,7 @@ export const SubsectionPage = () => {
               disabled={startFromYoutube.isPending}
             />
             {startFromYoutube.isPending && (
-              <p className="text-sm opacity-60 mt-3 text-center">
-                Запускаю генерацию...
-              </p>
+              <p className="text-sm opacity-60 mt-3 text-center">Запускаю генерацию...</p>
             )}
             {startFromYoutube.isError && (
               <p className="text-sm text-red-500 mt-3 break-all">
