@@ -189,6 +189,7 @@ export const TestPage = () => {
       }),
     onSuccess: (res, args) => {
       setAnswerResult(res);
+      queryClient.invalidateQueries({ queryKey: ['review-stats'] });
       if (args.optionIndex === undefined) {
         // Self mode — skip reveal, go to next question
         loadQuestion(session!);
@@ -245,6 +246,7 @@ export const TestPage = () => {
 
   const restart = () => {
     sessionStorage.removeItem('activeTest');
+    queryClient.invalidateQueries({ queryKey: ['review-stats'] });
     setStep('setup');
     setSession(null);
     setQuestion(null);
