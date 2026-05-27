@@ -26,6 +26,10 @@ internal sealed class CachedQuestionRepository(AppDbContext db) : ICachedQuestio
     public async Task<CachedQuestion?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         await db.CachedQuestions.FindAsync([id], ct);
 
+    public async Task<IReadOnlyList<CachedQuestion>> GetByIdsAsync(IReadOnlyList<Guid> ids, CancellationToken ct = default) =>
+        ids.Count == 0 ? [] :
+        await db.CachedQuestions.Where(q => ids.Contains(q.Id)).ToListAsync(ct);
+
     public async Task AddRangeAsync(IEnumerable<CachedQuestion> questions, CancellationToken ct = default) =>
         await db.CachedQuestions.AddRangeAsync(questions, ct);
 

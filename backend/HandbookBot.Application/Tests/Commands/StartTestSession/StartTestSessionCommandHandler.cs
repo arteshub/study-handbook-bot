@@ -44,22 +44,19 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
 
     private async Task<List<TestResult>> BuildWrongAnswerResultsAsync(TestSession session, long userId, CancellationToken ct)
     {
-        var topicIds = await uow.TestResults.GetTopicsWithWrongAnswersAsync(userId, ct);
+        var wrongIds = await uow.TestResults.GetWrongCachedQuestionIdsAsync(userId, ct);
+        if (wrongIds.Count == 0) return [];
 
-        var pool = new List<(Guid TopicId, Guid CachedId, string Question, string ModelAnswer)>();
-        foreach (var topicId in topicIds)
-        {
-            var cached = await uow.CachedQuestions.GetAllByTopicAsync(topicId, TestMode.Self, ct);
-            if (cached.Count == 0) continue;
-            var discardedIds = await uow.DiscardedQuestions.GetDiscardedIdsAsync(userId, cached.Select(q => q.Id).ToList(), ct);
-            foreach (var q in cached.Where(q => !discardedIds.Contains(q.Id)))
-                pool.Add((topicId, q.Id, q.QuestionText, q.ModelAnswer ?? string.Empty));
-        }
+        var discardedIds = await uow.DiscardedQuestions.GetDiscardedIdsAsync(userId, wrongIds.ToList(), ct);
+        var activeIds = wrongIds.Where(id => !discardedIds.Contains(id)).ToList();
+        if (activeIds.Count == 0) return [];
+
+        var questions = await uow.CachedQuestions.GetByIdsAsync(activeIds, ct);
 
         int order = 0;
-        return pool
+        return questions
             .OrderBy(_ => Guid.NewGuid())
-            .Select(x => TestResult.Create(session.Id, x.TopicId, x.Question, x.ModelAnswer, order++, null, x.CachedId))
+            .Select(q => TestResult.Create(session.Id, q.TopicId, q.QuestionText, q.ModelAnswer ?? string.Empty, order++, q.OptionsJson, q.Id))
             .ToList();
     }
 
