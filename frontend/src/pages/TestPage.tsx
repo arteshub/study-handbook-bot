@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueries } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import MDEditor from '@uiw/react-md-editor';
 import { BookOpen, SkipForward, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -19,6 +19,7 @@ const LETTERS = ['А', 'Б', 'В', 'Г'];
 
 export const TestPage = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('setup');
   const [mode, setMode] = useState<TestMode>('Self');
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
@@ -138,6 +139,7 @@ export const TestPage = () => {
       sessionStorage.removeItem('activeTest');
       setSession(completed);
       setStep('result');
+      queryClient.invalidateQueries({ queryKey: ['review-stats'] });
     } else {
       setQuestion(q);
       setAnswerResult(null);
@@ -219,6 +221,7 @@ export const TestPage = () => {
         await testsApi.discardQuestion(id);
         setDiscardedIds(prev => new Set([...prev, id]));
       }
+      queryClient.invalidateQueries({ queryKey: ['review-stats'] });
     } finally {
       setDiscarding(false);
     }

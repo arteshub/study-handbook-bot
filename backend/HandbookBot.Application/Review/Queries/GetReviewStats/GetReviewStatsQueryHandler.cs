@@ -12,7 +12,10 @@ internal sealed class GetReviewStatsQueryHandler(IUnitOfWork uow)
         var dueCount = await uow.TopicProgress.GetDueCountAsync(request.UserId, ct);
 
         var wrongIds = await uow.TestResults.GetWrongCachedQuestionIdsAsync(request.UserId, ct);
-        var wrongCount = wrongIds.Count;
+        var discardedIds = wrongIds.Count > 0
+            ? await uow.DiscardedQuestions.GetDiscardedIdsAsync(request.UserId, wrongIds.ToList(), ct)
+            : (IReadOnlySet<Guid>)new HashSet<Guid>();
+        var wrongCount = wrongIds.Count(id => !discardedIds.Contains(id));
 
         return new ReviewStatsDto(dueCount, 0, wrongCount);
     }

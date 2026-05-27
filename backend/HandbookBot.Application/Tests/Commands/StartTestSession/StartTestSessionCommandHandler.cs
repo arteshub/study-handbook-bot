@@ -35,7 +35,8 @@ internal sealed class StartTestSessionCommandHandler(IUnitOfWork uow, IAiService
             results = await BuildNormalResultsAsync(session, topics, request.Mode, request.UserId, ct);
         }
 
-        session.SetTotalQuestions(results.Count);
+        if (results.Count > 0)
+            session.SetTotalQuestions(results.Count);
         await uow.TestResults.AddRangeAsync(results, ct);
         await uow.SaveChangesAsync(ct);
 

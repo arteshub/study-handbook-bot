@@ -165,6 +165,7 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
             $"MUST INCLUDE:\n" +
             $"- Every technical explanation in full — if the speaker uses 5 sentences, write 5 sentences, not one\n" +
             $"- All code examples in fenced blocks with language tag and Russian inline comments; complete any truncated code to working state\n" +
+            $"- CODE SYNTHESIS RULE: whenever the speaker explains any programming concept (data structure, operation, API, function, algorithm, pattern) — write a complete, runnable code example that demonstrates it, even if the speaker did not show one. The example must be correct, minimal but complete, use the same language being taught, and have Russian inline comments explaining key lines.\n" +
             $"- All analogies, all \"why\", all \"under the hood\" explanations\n" +
             $"- All tips, anti-patterns, gotchas, edge cases, numbers, formulas\n\n" +
             $"FORMAT:\n" +
