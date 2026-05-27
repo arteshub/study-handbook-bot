@@ -13,7 +13,7 @@ import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
 import { TopicChat } from '../components/TopicChat';
 
-type Step = 'setup' | 'question' | 'reveal' | 'result';
+type Step = 'setup' | 'generating' | 'question' | 'reveal' | 'result';
 
 const LETTERS = ['А', 'Б', 'В', 'Г'];
 
@@ -83,25 +83,50 @@ export const TestPage = () => {
   useEffect(() => {
     const raw = sessionStorage.getItem('activeTest');
     if (!raw) return;
-    try {
-      const { id } = JSON.parse(raw) as { id: string };
-      testsApi.getSession(id).then(s => {
+
+    let saved: { id?: string; pending?: boolean; startedAt?: number };
+    try { saved = JSON.parse(raw); } catch { sessionStorage.removeItem('activeTest'); return; }
+
+    if (saved.id) {
+      testsApi.getSession(saved.id).then(s => {
         if (!s.isCompleted) {
           setSession(s);
           testsApi.getNextQuestion(s.id).then(q => {
-            if (!q) {
-              sessionStorage.removeItem('activeTest');
-            } else {
-              setQuestion(q);
-              setStep('question');
-            }
+            if (!q) sessionStorage.removeItem('activeTest');
+            else { setQuestion(q); setStep('question'); }
           });
         } else {
           sessionStorage.removeItem('activeTest');
         }
       }).catch(() => sessionStorage.removeItem('activeTest'));
-    } catch {
-      sessionStorage.removeItem('activeTest');
+      return;
+    }
+
+    if (saved.pending) {
+      const TIMEOUT_MS = 5 * 60 * 1000;
+      if (saved.startedAt && Date.now() - saved.startedAt > TIMEOUT_MS) {
+        sessionStorage.removeItem('activeTest');
+        return;
+      }
+      setStep('generating');
+      const interval = setInterval(() => {
+        const cur = sessionStorage.getItem('activeTest');
+        if (!cur) { clearInterval(interval); setStep('setup'); return; }
+        try {
+          const parsed = JSON.parse(cur);
+          if (parsed.id) {
+            clearInterval(interval);
+            testsApi.getSession(parsed.id).then(s => {
+              setSession(s);
+              return testsApi.getNextQuestion(s.id);
+            }).then(q => {
+              if (q) { setQuestion(q); setStep('question'); }
+              else { sessionStorage.removeItem('activeTest'); setStep('setup'); }
+            }).catch(() => { sessionStorage.removeItem('activeTest'); setStep('setup'); });
+          }
+        } catch { clearInterval(interval); sessionStorage.removeItem('activeTest'); setStep('setup'); }
+      }, 1000);
+      return () => clearInterval(interval);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -125,14 +150,17 @@ export const TestPage = () => {
   };
 
   const start = useMutation({
-    mutationFn: (opts: { reviewMode?: boolean; wrongAnswersMode?: boolean }) => testsApi.startSession({
-      mode: opts.reviewMode || opts.wrongAnswersMode ? 'Self' : mode,
-      sectionIds: opts.reviewMode || opts.wrongAnswersMode || selectedSectionIds.length === 0 ? undefined : selectedSectionIds,
-      subsectionIds: opts.reviewMode || opts.wrongAnswersMode || selectedSubsectionIds.length === 0 ? undefined : selectedSubsectionIds,
-      topicIds: opts.reviewMode || opts.wrongAnswersMode || selectedTopicIds.length === 0 ? undefined : selectedTopicIds,
-      reviewMode: opts.reviewMode ?? false,
-      wrongAnswersMode: opts.wrongAnswersMode ?? false,
-    }),
+    mutationFn: (opts: { reviewMode?: boolean; wrongAnswersMode?: boolean }) => {
+      sessionStorage.setItem('activeTest', JSON.stringify({ pending: true, startedAt: Date.now() }));
+      return testsApi.startSession({
+        mode: opts.reviewMode || opts.wrongAnswersMode ? 'Self' : mode,
+        sectionIds: opts.reviewMode || opts.wrongAnswersMode || selectedSectionIds.length === 0 ? undefined : selectedSectionIds,
+        subsectionIds: opts.reviewMode || opts.wrongAnswersMode || selectedSubsectionIds.length === 0 ? undefined : selectedSubsectionIds,
+        topicIds: opts.reviewMode || opts.wrongAnswersMode || selectedTopicIds.length === 0 ? undefined : selectedTopicIds,
+        reviewMode: opts.reviewMode ?? false,
+        wrongAnswersMode: opts.wrongAnswersMode ?? false,
+      });
+    },
     onSuccess: async (s) => {
       sessionStorage.setItem('activeTest', JSON.stringify({ id: s.id }));
       setSession(s);
@@ -145,6 +173,7 @@ export const TestPage = () => {
       await loadQuestion(s);
     },
     onError: (e: any) => {
+      sessionStorage.removeItem('activeTest');
       setStartError(e?.response?.data?.detail ?? e?.message ?? 'Ошибка при создании теста');
     },
   });
@@ -237,6 +266,15 @@ export const TestPage = () => {
     : selectedSectionIds.length > 1
     ? `${selectedSectionIds.length} разделов`
     : 'Все разделы';
+
+  // ── Generating ────────────────────────────────────────────────────────────
+  if (step === 'generating') return (
+    <div className="flex flex-col items-center justify-center min-h-screen gap-3 px-4">
+      <Spinner />
+      <p className="text-sm font-medium">Генерация теста...</p>
+      <p className="text-xs opacity-40 text-center">Вопросы готовятся, не закрывай приложение</p>
+    </div>
+  );
 
   // ── Setup ──────────────────────────────────────────────────────────────────
   if (step === 'setup') return (
