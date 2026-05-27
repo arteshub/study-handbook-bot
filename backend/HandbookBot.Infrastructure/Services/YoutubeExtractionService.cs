@@ -88,7 +88,7 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
         }
 
         progress?.Report(100);
-        return new YoutubeExtractResult(videoTitle, string.Join("\n\n", parts));
+        return new YoutubeExtractResult(videoTitle, string.Join("\n\n", parts.Where(p => !string.IsNullOrWhiteSpace(p))));
     }
 
     private static List<string> SplitIntoChunks(List<string> lines, int chunkMinutes)
@@ -149,31 +149,35 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
 
         var prompt =
             $"You are given subtitles for segment {partIndex} of {totalParts} of the technical talk \"{videoTitle}\".\n\n" +
-            $"YOUR TASK: produce a verbatim structured transcript of this segment — not a summary, not a rewrite. Reproduce every explanation the speaker gives in full detail. If the speaker spends 5 sentences on something, write 5 sentences, not one.\n\n" +
-            $"AUTHOR'S STYLE — match it exactly. Here is a concrete example of the required output style:\n\n" +
+            $"=== RULE 1 — SKIP LIST (hard rule, no exceptions) ===\n" +
+            $"Completely omit anything that falls into these categories — do not mention, summarize, or reference them:\n" +
+            $"- Any promotion of a paid course, product, or service (\"мой курс\", \"запишитесь\", \"5 недель\", \"поток\", \"купить\")\n" +
+            $"- Sponsor segments and advertisements\n" +
+            $"- Subscribe/like/follow/share calls-to-action\n" +
+            $"- Speaker biography or self-introduction filler\n" +
+            $"- Pure audience interaction with zero technical content (\"напишите в чат\", \"кто хочет\")\n\n" +
+            $"If an entire section consists only of promotional content, skip the section entirely.\n\n" +
+            $"=== RULE 2 — CODE (hard rule, mandatory for every concept) ===\n" +
+            $"Subtitles do not contain code — the speaker shows code on screen while talking. You MUST reconstruct every piece of code the speaker demonstrates.\n" +
+            $"For EVERY programming concept, pattern, or function the speaker explains: write a complete, runnable implementation in a fenced code block.\n" +
+            $"Rules for code blocks:\n" +
+            $"- Language tag on the fence (```go, ```python, etc.)\n" +
+            $"- Russian inline comments on every non-obvious line\n" +
+            $"- Complete and compilable — no \"...\" placeholders, no pseudocode\n" +
+            $"- If the speaker verbally describes a function signature, parameters, or algorithm — write the full implementation\n" +
+            $"A section that discusses code but contains no code block is WRONG. Every pattern section must have at least one code example.\n\n" +
+            $"=== RULE 3 — CONTENT COMPLETENESS ===\n" +
+            $"Reproduce every technical explanation the speaker gives in full detail — not a summary. If the speaker uses 5 sentences to explain something, write 5 sentences.\n" +
+            $"Include: every \"why\", every \"under the hood\", all analogies, all gotchas, all anti-patterns, all tips, all numbers/formulas.\n\n" +
+            $"=== STYLE — match this example exactly ===\n\n" +
             $"---\n{styleExample}\n---\n\n" +
-            $"STYLE RULES (derived from the example above):\n" +
-            $"- Conversational but precise technical language — write exactly as a good lecturer speaks\n" +
-            $"- Every concept gets: what it is, why it works this way, what happens under the hood\n" +
-            $"- Comparisons with other languages when the speaker mentions them — include them fully\n" +
-            $"- \"Many people mistakenly think...\", \"This is important\", \"Note that...\" — keep all such emphasis\n" +
-            $"- Explain every nuance the speaker explains; if they say something twice for emphasis, reflect that emphasis\n\n" +
-            $"SKIP ONLY:\n" +
-            $"- Ads and sponsor segments\n" +
-            $"- Subscribe / like / follow calls-to-action\n" +
-            $"- Pure filler with zero informational content\n\n" +
-            $"MUST INCLUDE:\n" +
-            $"- Every technical explanation in full — if the speaker uses 5 sentences, write 5 sentences, not one\n" +
-            $"- All code examples in fenced blocks with language tag and Russian inline comments; complete any truncated code to working state\n" +
-            $"- CODE SYNTHESIS RULE: whenever the speaker explains any programming concept (data structure, operation, API, function, algorithm, pattern) — write a complete, runnable code example that demonstrates it, even if the speaker did not show one. The example must be correct, minimal but complete, use the same language being taught, and have Russian inline comments explaining key lines.\n" +
-            $"- All analogies, all \"why\", all \"under the hood\" explanations\n" +
-            $"- All tips, anti-patterns, gotchas, edge cases, numbers, formulas\n\n" +
-            $"FORMAT:\n" +
-            $"- Number sections continuing from where segment {partIndex - 1} left off (start from 1 only if this is segment 1)\n" +
-            $"- Sections: ### N. Название [HH:MM – HH:MM]\n" +
+            $"Notice how the example has prose explanation followed by a code block — this is the required pattern for every concept.\n\n" +
+            $"=== FORMAT ===\n" +
+            $"- Sections: ### N. Название [HH:MM – HH:MM] (continue numbering from segment {partIndex - 1}; start at 1 only for segment 1)\n" +
             $"- Use ## ЧАСТЬ headers for major thematic shifts\n" +
+            $"- Conversational but precise technical Russian throughout\n" +
             $"{cheatsheetInstruction}" +
-            $"IMPORTANT: all output text must be written in Russian.\n\n" +
+            $"All output text must be in Russian.\n\n" +
             $"Subtitles (segment {partIndex}/{totalParts}):\n{subtitleChunk}";
 
         var response = await client.CompleteChatAsync(
@@ -181,7 +185,14 @@ public class YoutubeExtractionService(YoutubeClient youtubeClient, IConfiguratio
             new ChatCompletionOptions { MaxOutputTokenCount = 16384 },
             ct);
 
-        return response.Value.Content[0].Text;
+        var text = response.Value.Content[0].Text;
+        // OpenAI sometimes refuses ad-heavy chunks — return empty string so the segment is silently skipped
+        if (text.StartsWith("I'm sorry", StringComparison.OrdinalIgnoreCase) ||
+            text.StartsWith("I cannot", StringComparison.OrdinalIgnoreCase) ||
+            text.StartsWith("I'm unable", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        return text;
     }
 
     private ChatClient CreateChatClient() => new(
