@@ -25,6 +25,7 @@ export const SubsectionPage = () => {
   const [createMode, setCreateMode] = useState<CreateMode>(null);
   const [title, setTitle] = useState('');
   const [ytUrl, setYtUrl] = useState('');
+  const [ytError, setYtError] = useState('');
 
   const { data: topics, isLoading } = useQuery({
     queryKey: ['topics', id],
@@ -47,22 +48,22 @@ export const SubsectionPage = () => {
   });
 
   const startFromYoutube = useMutation({
-    mutationFn: () => youtubeApi.startGeneration(ytUrl, id!),
+    mutationFn: (url: string) => youtubeApi.startGeneration(url, id!),
     onSuccess: data => {
       addJob({ topicId: data.topicId, videoTitle: data.videoTitle, progress: 0, isCompleted: false });
       qc.invalidateQueries({ queryKey: ['topics', id] });
-      closeTopicModal();
+    },
+    onError: (e: any) => {
+      setYtError(e?.response?.data?.error ?? e?.message ?? 'Ошибка запуска генерации');
     },
   });
 
   const closeTopicModal = () => {
-    if (startFromYoutube.isPending) return;
     setAddMode(null);
     setCreateMode(null);
     setTitle('');
     setYtUrl('');
     createManual.reset();
-    startFromYoutube.reset();
   };
 
   if (isLoading) return <Spinner />;
@@ -94,6 +95,12 @@ export const SubsectionPage = () => {
       </div>
 
       <div className="px-4 pt-4">
+        {ytError && (
+          <div className="mb-3 p-3 rounded-xl bg-red-50 text-sm text-red-500 flex items-start gap-2">
+            <span className="flex-1">{ytError}</span>
+            <button onClick={() => setYtError('')} className="shrink-0 opacity-60 hover:opacity-100">✕</button>
+          </div>
+        )}
         {topics?.length === 0
           ? (
             <EmptyState
@@ -195,25 +202,17 @@ export const SubsectionPage = () => {
               placeholder="https://youtube.com/watch?v=..."
               value={ytUrl}
               onChange={e => setYtUrl(e.target.value)}
-              disabled={startFromYoutube.isPending}
             />
-            {startFromYoutube.isPending && (
-              <p className="text-sm opacity-60 mt-3 text-center">Запускаю генерацию...</p>
-            )}
-            {startFromYoutube.isError && (
-              <p className="text-sm text-red-500 mt-3 break-all">
-                {(startFromYoutube.error as any)?.response?.data?.error
-                  ?? (startFromYoutube.error as any)?.message
-                  ?? 'Неизвестная ошибка'}
-              </p>
-            )}
             <div className="flex gap-2 mt-4">
-              <Button variant="secondary" className="flex-1" onClick={() => setCreateMode(null)} disabled={startFromYoutube.isPending}>Назад</Button>
+              <Button variant="secondary" className="flex-1" onClick={() => setCreateMode(null)}>Назад</Button>
               <Button
                 className="flex-1"
-                loading={startFromYoutube.isPending}
-                disabled={!ytUrl.trim() || startFromYoutube.isPending}
-                onClick={() => startFromYoutube.mutate()}
+                disabled={!ytUrl.trim()}
+                onClick={() => {
+                  const url = ytUrl;
+                  closeTopicModal();
+                  startFromYoutube.mutate(url);
+                }}
               >
                 Создать
               </Button>
